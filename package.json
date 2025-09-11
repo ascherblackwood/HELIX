@@ -1,0 +1,92 @@
+{
+  "name": "actv-ad-manager",
+  "version": "3.3.1",
+  "description": "Act.V - Active Vector AD Management Console",
+  "author": "Act.V Team",
+  "main": "main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "electron": "electron .",
+    "electron-dev": "concurrently \"npm start\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
+    "electron-build": "npm run build && electron .",
+    "electron-standalone": "npm run build && electron .",
+    "dist": "npm run build && electron-builder",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "dependencies": {
+    "@heroicons/react": "^2.0.18",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.15.0",
+    "react-scripts": "5.0.1",
+    "tailwindcss": "^3.3.3",
+    "web-vitals": "^3.4.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^16.18.0",
+    "@types/react": "^18.2.21",
+    "@types/react-dom": "^18.2.7",
+    "autoprefixer": "^10.4.15",
+    "concurrently": "^8.2.0",
+    "cross-env": "^7.0.3",
+    "electron": "^26.0.0",
+    "electron-builder": "^24.6.3",
+    "electron-is-dev": "^2.0.0",
+    "electron-packager": "^17.1.2",
+    "postcss": "^8.4.28",
+    "typescript": "^4.9.5",
+    "wait-on": "^7.0.1"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "build": {
+    "appId": "com.actv.admanager",
+    "productName": "Act.V",
+    "asar": true,
+    "directories": {
+      "output": "dist-build"
+    },
+    "extends": null,
+    "files": [
+      "build/**/*",
+      "main.js",
+      "preload.js",
+      "node_modules/**/*",
+      "src/assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "src/assets/actv.ico",
+      "artifactName": "ActV-v${version}.exe"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "src/assets/actv.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "src/assets/actv.png"
+    }
+  }
+}

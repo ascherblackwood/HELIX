@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm start)",
+      "Bash(npm install)",
+      "Bash(npm cache clean:*)",
+      "Bash(npm run:*)",
+      "Bash(taskkill:*)",
+      "Bash(powershell:*)",
+      "Bash(./dist-build/ActV-v3.2.1.exe)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
