@@ -1437,181 +1437,6 @@ ipcMain.handle('test-winrm', async (event, computerName) => {
   });
 });
 
-// Get real-time computer inventory via WinRM/CIM (Kerberos/Negotiate)
-ipcMain.handle('get-computer-inventory', async (event, computerName) => {
-  if (!computerName) {
-    return { success: false, error: 'Computer name is required' };
-  }
-
-  // Helper: build a PowerShell block to query INVENTORY either locally or via CimSession
-  const buildPs = (mode /* 'local' | 'remote' */, targetName) => {
-    // When running locally, no CimSession is used which avoids WinRM requirements
-    if (mode === 'local') {
-      return `
-        try {
-          $ErrorActionPreference = 'Stop'
-          $os   = Get-CimInstance -ClassName Win32_OperatingSystem
-          $cs   = Get-CimInstance -ClassName Win32_ComputerSystem
-          $bios = Get-CimInstance -ClassName Win32_BIOS
-          $cpu  = Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1
-          $net  = Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -Filter "IPEnabled = True"
-
-          function Get-SafeLastBoot([object]$val) {
-            try {
-              if ($null -eq $val) { return $null }
-              if ($val -is [datetime]) { return $val.ToString('o') }
-              if ($val -is [string] -and $val.Length -ge 14) {
-                return ([Management.ManagementDateTimeConverter]::ToDateTime($val)).ToString('o')
-              }
-            } catch { }
-            return $null
-          }
-
-          $ipv4 = $null
-          foreach ($n in $net) {
-            if ($n.IPAddress) {
-              foreach ($ip in $n.IPAddress) { if ($ip -match '^\d+\.\d+\.\d+\.\d+$') { $ipv4 = $ip; break } }
-              if ($ipv4) { break }
-            }
-          }
-
-          if (-not $net) { $net = @() }
-          $mac = ($net | Where-Object { $_.MACAddress } | Select-Object -First 1).MACAddress
-          if (-not $ipv4) {
-            try {
-              $ipv4 = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-                Where-Object { $_.IPAddress -and ($_.IPAddress -notmatch '^169\.') } |
-                Select-Object -ExpandProperty IPAddress -First 1
-            } catch { }
-          }
-          $lastBoot = Get-SafeLastBoot $os.LastBootUpTime
-          $totalMemGB = if ($cs.TotalPhysicalMemory) { [Math]::Round(($cs.TotalPhysicalMemory/1GB),2) } else { $null }
-
-          $result = [PSCustomObject]@{
-            computerName = $cs.Name
-            manufacturer = $cs.Manufacturer
-            model = $cs.Model
-            serialNumber = $bios.SerialNumber
-            processor = $cpu.Name
-            memory = if ($totalMemGB) { "$totalMemGB GB" } else { $null }
-            os = $os.Caption
-            osVersion = $os.Version
-            ipAddress = $ipv4
-            macAddress = $mac
-            lastBootTime = $lastBoot
-            currentUser = $cs.UserName
-            domain = $cs.Domain
-          }
-          $result | ConvertTo-Json -Depth 3
-        } catch {
-          Write-Output "ERROR: $($_.Exception.Message)"
-        }
-      `;
-    }
-
-    // Remote via CimSession using Negotiate (Kerberos/NTLM) requires WinRM
-    return `
-      try {
-        $ErrorActionPreference = 'Stop'
-        $cn = '${targetName}'
-        $session = New-CimSession -ComputerName $cn -Authentication Negotiate
-
-        $os = Get-CimInstance -CimSession $session -ClassName Win32_OperatingSystem
-        $cs = Get-CimInstance -CimSession $session -ClassName Win32_ComputerSystem
-        $bios = Get-CimInstance -CimSession $session -ClassName Win32_BIOS
-        $cpu = Get-CimInstance -CimSession $session -ClassName Win32_Processor | Select-Object -First 1
-        $net = Get-CimInstance -CimSession $session -ClassName Win32_NetworkAdapterConfiguration -Filter "IPEnabled = True"
-
-        function Get-SafeLastBoot([object]$val) {
-          try {
-            if ($null -eq $val) { return $null }
-            if ($val -is [datetime]) { return $val.ToString('o') }
-            if ($val -is [string] -and $val.Length -ge 14) {
-              return ([Management.ManagementDateTimeConverter]::ToDateTime($val)).ToString('o')
-            }
-          } catch { }
-          return $null
-        }
-
-        $ipv4 = $null
-        foreach ($n in $net) {
-          if ($n.IPAddress) {
-            foreach ($ip in $n.IPAddress) { if ($ip -match '^\d+\.\d+\.\d+\.\d+$') { $ipv4 = $ip; break } }
-            if ($ipv4) { break }
-          }
-        }
-
-        if (-not $net) { $net = @() }
-        $mac = ($net | Where-Object { $_.MACAddress } | Select-Object -First 1).MACAddress
-        if (-not $ipv4) {
-          try {
-            $ipv4 = Get-NetIPAddress -CimSession $session -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-              Where-Object { $_.IPAddress -and ($_.IPAddress -notmatch '^169\.') } |
-              Select-Object -ExpandProperty IPAddress -First 1
-          } catch { }
-        }
-        $lastBoot = Get-SafeLastBoot $os.LastBootUpTime
-        $totalMemGB = if ($cs.TotalPhysicalMemory) { [Math]::Round(($cs.TotalPhysicalMemory/1GB),2) } else { $null }
-
-        $result = [PSCustomObject]@{
-          computerName = $cs.Name
-          manufacturer = $cs.Manufacturer
-          model = $cs.Model
-          serialNumber = $bios.SerialNumber
-          processor = $cpu.Name
-          memory = if ($totalMemGB) { "$totalMemGB GB" } else { $null }
-          os = $os.Caption
-          osVersion = $os.Version
-          ipAddress = $ipv4
-          macAddress = $mac
-          lastBootTime = $lastBoot
-          currentUser = $cs.UserName
-          domain = $cs.Domain
-        }
-
-        $session | Remove-CimSession
-        $result | ConvertTo-Json -Depth 3
-      } catch {
-        Write-Output "ERROR: $($_.Exception.Message)"
-      }
-    `;
-  };
-
-  const osMod = require('os');
-  const localName = osMod.hostname();
-  const normalize = (n) => (n || '').toString().split('.')[0].trim().toUpperCase();
-  const isLocal = normalize(computerName) === normalize(localName) || ['LOCALHOST','127.0.0.1'] .includes(normalize(computerName));
-
-  // First try: if local machine, run local query (no WinRM). Otherwise try remote; on failure, if the
-  // target actually matches the local host, fall back to local query.
-  try {
-    const script = buildPs(isLocal ? 'local' : 'remote', computerName);
-    const output = await executePowerShell(script);
-    if (output.startsWith('ERROR:')) {
-      // If remote failed, try local as a reliability fallback when the name matches local host
-      if (!isLocal && normalize(computerName) === normalize(localName)) {
-        const localOut = await executePowerShell(buildPs('local'));
-        if (localOut.startsWith('ERROR:')) {
-          return { success: false, error: localOut.substring(6).trim() };
-        }
-        return { success: true, data: JSON.parse(localOut) };
-      }
-      return { success: false, error: output.substring(6).trim() };
-    }
-    return { success: true, data: JSON.parse(output) };
-  } catch (e) {
-    // Final fallback: try local if we can and name appears to be this host
-    try {
-      if (normalize(computerName) === normalize(localName)) {
-        const localOut = await executePowerShell(buildPs('local'));
-        if (!localOut.startsWith('ERROR:')) {
-          return { success: true, data: JSON.parse(localOut) };
-        }
-      }
-    } catch (_) {}
-    return { success: false, error: e.message };
-  }
-});
 
 // Enable WinRM Remotely using PowerShell
 ipcMain.handle('enable-winrm', async (event, computerName) => {
@@ -1978,18 +1803,87 @@ ipcMain.handle('reboot-computer', async (event, computerName) => {
     try {
       $ErrorActionPreference = 'Stop'
       $cn = '${computerName}'
+      $success = $false
+      $message = ""
       
-      # Try remote reboot first
-      try {
-        Restart-Computer -ComputerName $cn -Force -ErrorAction Stop
-        Write-Output "SUCCESS: Reboot command sent to $cn"
-      } catch {
-        # Fallback using shutdown command
-        shutdown /r /m \\\\$cn /f /t 0
-        Write-Output "SUCCESS: Fallback reboot command sent to $cn"
+      # Check if target is the local computer
+      $isLocal = ($cn.ToLower() -eq $env:COMPUTERNAME.ToLower()) -or ($cn.ToLower() -eq "localhost") -or ($cn -eq "127.0.0.1")
+      
+      if ($isLocal) {
+        # Local reboot - use shutdown command for immediate effect
+        try {
+          shutdown /r /f /t 5 /c "Remote reboot initiated from ACTV"
+          $success = $true
+          $message = "Local reboot initiated - system will restart in 5 seconds"
+        } catch {
+          Write-Output "ERROR: Failed to initiate local reboot: $($_.Exception.Message)"
+          exit 1
+        }
+      } else {
+        # Remote reboot - try multiple methods
+        
+        # Method 1: Try PowerShell Restart-Computer with credentials
+        try {
+          Write-Host "Attempting PowerShell Restart-Computer..."
+          Restart-Computer -ComputerName $cn -Force -Wait:$false -ErrorAction Stop
+          $success = $true
+          $message = "PowerShell reboot command sent successfully"
+        } catch {
+          Write-Host "PowerShell method failed: $($_.Exception.Message)"
+          
+          # Method 2: Try shutdown command
+          try {
+            Write-Host "Attempting shutdown command..."
+            $shutdownResult = shutdown /r /m \\\\$cn /f /t 0 /c "Remote reboot initiated from ACTV" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              $success = $true
+              $message = "Shutdown command executed successfully"
+            } else {
+              throw "Shutdown command failed with exit code $LASTEXITCODE - $shutdownResult"
+            }
+          } catch {
+            Write-Host "Shutdown command failed: $($_.Exception.Message)"
+            
+            # Method 3: Try WMI Win32_OperatingSystem
+            try {
+              Write-Host "Attempting WMI reboot..."
+              $os = Get-WmiObject -Class Win32_OperatingSystem -ComputerName $cn -ErrorAction Stop
+              $rebootResult = $os.Reboot()
+              if ($rebootResult.ReturnValue -eq 0) {
+                $success = $true
+                $message = "WMI reboot command executed successfully"
+              } else {
+                throw "WMI reboot failed with return code $($rebootResult.ReturnValue)"
+              }
+            } catch {
+              Write-Host "WMI method failed: $($_.Exception.Message)"
+              
+              # Method 4: Try CIM/WinRM approach
+              try {
+                Write-Host "Attempting CIM session reboot..."
+                $session = New-CimSession -ComputerName $cn -ErrorAction Stop
+                $os = Get-CimInstance -CimSession $session -ClassName Win32_OperatingSystem -ErrorAction Stop
+                Invoke-CimMethod -InputObject $os -MethodName Reboot -ErrorAction Stop
+                Remove-CimSession $session
+                $success = $true
+                $message = "CIM reboot command executed successfully"
+              } catch {
+                Write-Output "ERROR: All reboot methods failed. Last error: $($_.Exception.Message). Ensure WinRM is enabled on target computer and you have administrative privileges."
+                exit 1
+              }
+            }
+          }
+        }
       }
+      
+      if ($success) {
+        Write-Output "SUCCESS: $message"
+      } else {
+        Write-Output "ERROR: Reboot command failed to execute"
+      }
+      
     } catch {
-      Write-Output "ERROR: $($_.Exception.Message)"
+      Write-Output "ERROR: Unexpected error: $($_.Exception.Message)"
     }
   `;
 
@@ -1998,9 +1892,12 @@ ipcMain.handle('reboot-computer', async (event, computerName) => {
     if (output.startsWith('ERROR:')) {
       return { success: false, error: output.substring(6).trim() };
     }
-    return { success: true, message: output };
+    if (output.startsWith('SUCCESS:')) {
+      return { success: true, message: output.substring(8).trim() };
+    }
+    return { success: false, error: 'Unexpected response from PowerShell script' };
   } catch (e) {
-    return { success: false, error: e.message };
+    return { success: false, error: `PowerShell execution failed: ${e.message}` };
   }
 });
 
@@ -2183,94 +2080,6 @@ ipcMain.handle('open-printer-server', async (event, serverPath) => {
       resolve({ success: false, error: 'Open server timeout' });
     }, 5000);
   });
-});
-
-// Open Computer C$ Administrative Share
-ipcMain.handle('open-computer-c-drive', async (event, computerName) => {
-  const { spawn } = require('child_process');
-  
-  if (!computerName) {
-    return { success: false, error: 'Computer name is required' };
-  }
-  
-  const psScript = `
-    try {
-      $ErrorActionPreference = 'Stop'
-      $computerName = '${computerName}'
-      $uncPath = "\\\\$computerName\\C$"
-      
-      # Method 1: Try direct access with current credentials
-      try {
-        if (Test-Path $uncPath -ErrorAction Stop) {
-          Start-Process explorer $uncPath
-          Write-Output "SUCCESS: Opened $uncPath with current credentials"
-          exit 0
-        }
-      } catch {
-        Write-Host "Direct access failed: $($_.Exception.Message)"
-      }
-      
-      # Method 2: Try to establish connection with net use first
-      try {
-        Write-Host "Attempting to establish connection with net use..."
-        $netResult = net use "\\\\$computerName\\IPC$" 2>&1
-        if ($LASTEXITCODE -eq 0 -or $netResult -like "*already*" -or $netResult -like "*successfully*") {
-          Start-Process explorer $uncPath
-          Write-Output "SUCCESS: Connected and opened $uncPath"
-          exit 0
-        }
-      } catch {
-        Write-Host "Net use method failed: $($_.Exception.Message)"
-      }
-      
-      # Method 3: Try with explicit credential prompt
-      try {
-        Write-Host "Trying with credential prompt..."
-        $cmdPath = "\\\\$computerName\\C$"
-        Start-Process "explorer" -ArgumentList $cmdPath -Verb RunAs
-        Write-Output "SUCCESS: Opened $uncPath with elevated credentials"
-        exit 0
-      } catch {
-        Write-Host "Elevated access failed: $($_.Exception.Message)"
-      }
-      
-      # Method 4: Last resort - try to map drive temporarily
-      try {
-        Write-Host "Attempting temporary drive mapping..."
-        $drive = Get-ChildItem function:[d-z]: -n | Where-Object { !(Test-Path $_) } | Select-Object -First 1
-        if ($drive) {
-          $mapResult = net use "$drive" "\\\\$computerName\\C$" 2>&1
-          if ($LASTEXITCODE -eq 0) {
-            Start-Process explorer $drive
-            # Clean up the mapping after a delay
-            Start-Job { Start-Sleep 5; net use "$using:drive" /delete } | Out-Null
-            Write-Output "SUCCESS: Mapped and opened drive $drive"
-            exit 0
-          }
-        }
-      } catch {
-        Write-Host "Drive mapping failed: $($_.Exception.Message)"
-      }
-      
-      Write-Output "ERROR: All access methods failed. Ensure you have administrative privileges on $computerName and the computer is accessible. Try running ActV as administrator or ensure your current account has admin rights on the target computer."
-      
-    } catch {
-      Write-Output "ERROR: Unexpected error: $($_.Exception.Message)"
-    }
-  `;
-
-  try {
-    const output = await executePowerShell(psScript);
-    if (output.startsWith('ERROR:')) {
-      return { success: false, error: output.substring(6).trim() };
-    }
-    if (output.startsWith('SUCCESS:')) {
-      return { success: true, message: output.substring(8).trim() };
-    }
-    return { success: false, error: 'Failed to access C$ share. Try running ActV as administrator.' };
-  } catch (e) {
-    return { success: false, error: `Failed to execute C$ access: ${e.message}` };
-  }
 });
 
 // Add User to Group

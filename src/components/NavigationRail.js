@@ -31,7 +31,6 @@ const navigationItems = [
   { id: 'computers', label: 'Computers', icon: ComputerDesktopIcon, iconSolid: ComputerDesktopIconSolid },
   { id: 'groups', label: 'Groups', icon: UserGroupIcon, iconSolid: UserGroupIconSolid },
   { id: 'reports', label: 'Reports', icon: DocumentTextIcon, iconSolid: DocumentTextIconSolid },
-  { id: 'inventory', label: 'Inventory', icon: ArchiveBoxIcon, iconSolid: ArchiveBoxIconSolid },
   { id: 'knowledge', label: 'Knowledge Base', icon: BookOpenIcon, iconSolid: BookOpenIconSolid },
   { id: 'settings', label: 'Settings', icon: Cog6ToothIcon, iconSolid: Cog6ToothIconSolid },
 ];

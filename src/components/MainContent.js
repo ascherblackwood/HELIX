@@ -4,7 +4,6 @@ import UsersPage from '../pages/UsersPage';
 import ComputersPage from '../pages/ComputersPage';
 import GroupsPage from '../pages/GroupsPage';
 import ReportsPage from '../pages/ReportsPage';
-import InventoryPage from '../pages/InventoryPage';
 import KnowledgeBasePage from '../pages/KnowledgeBasePage';
 import SettingsPage from '../pages/SettingsPage';
 
@@ -21,8 +20,6 @@ const MainContent = ({ currentPage }) => {
         return <GroupsPage />;
       case 'reports':
         return <ReportsPage />;
-      case 'inventory':
-        return <InventoryPage />;
       case 'knowledge':
         return <KnowledgeBasePage />;
       case 'settings':
