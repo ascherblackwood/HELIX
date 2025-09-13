@@ -19,7 +19,8 @@ import {
   UserGroupIcon,
   TrashIcon,
   ExclamationTriangleIcon,
-  ChartPieIcon
+  ChartPieIcon,
+  FolderOpenIcon
 } from '@heroicons/react/24/outline';
 
 const ComputerDetailModal = ({ computer, isOpen, onClose }) => {
@@ -191,6 +192,27 @@ const ComputerDetailModal = ({ computer, isOpen, onClose }) => {
     // TODO: Implement RDP/Dameware connection
     console.log('Connecting to:', computer.computerName);
     alert(`Opening remote connection to ${computer.computerName}`);
+  };
+
+  const handleOpenCDrive = async () => {
+    try {
+      setActionStatus('Attempting C$ access with multiple authentication methods...');
+      const result = await window.electronAPI?.openComputerCDrive?.(computer.computerName);
+      if (result?.success) {
+        setActionStatus(`✓ ${result.message}`);
+      } else {
+        const errorMsg = result?.error || 'Unknown error';
+        if (errorMsg.includes('administrative privileges')) {
+          setActionStatus(`⚠ Access Denied: ${errorMsg}. Solutions: 1) Run ActV as Administrator, 2) Ensure your account has admin rights on ${computer.computerName}, 3) Check if administrative shares are enabled on the target computer.`);
+        } else {
+          setActionStatus(`⚠ Failed to access C$: ${errorMsg}`);
+        }
+      }
+    } catch (e) {
+      setActionStatus(`⚠ Error accessing C$: ${e.message}`);
+    } finally {
+      setTimeout(() => setActionStatus(''), 12000); // Longer timeout for detailed error messages
+    }
   };
 
   // Available printers from inventory (simulating 300+ printers)
@@ -660,6 +682,14 @@ const ComputerDetailModal = ({ computer, isOpen, onClose }) => {
               >
                 <UserGroupIcon className="w-4 h-4" />
                 <span>User Profiles</span>
+              </button>
+              
+              <button
+                onClick={handleOpenCDrive}
+                className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+              >
+                <FolderOpenIcon className="w-4 h-4" />
+                <span>Open C$ Share</span>
               </button>
             </div>
           </div>

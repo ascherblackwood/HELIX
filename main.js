@@ -2185,6 +2185,94 @@ ipcMain.handle('open-printer-server', async (event, serverPath) => {
   });
 });
 
+// Open Computer C$ Administrative Share
+ipcMain.handle('open-computer-c-drive', async (event, computerName) => {
+  const { spawn } = require('child_process');
+  
+  if (!computerName) {
+    return { success: false, error: 'Computer name is required' };
+  }
+  
+  const psScript = `
+    try {
+      $ErrorActionPreference = 'Stop'
+      $computerName = '${computerName}'
+      $uncPath = "\\\\$computerName\\C$"
+      
+      # Method 1: Try direct access with current credentials
+      try {
+        if (Test-Path $uncPath -ErrorAction Stop) {
+          Start-Process explorer $uncPath
+          Write-Output "SUCCESS: Opened $uncPath with current credentials"
+          exit 0
+        }
+      } catch {
+        Write-Host "Direct access failed: $($_.Exception.Message)"
+      }
+      
+      # Method 2: Try to establish connection with net use first
+      try {
+        Write-Host "Attempting to establish connection with net use..."
+        $netResult = net use "\\\\$computerName\\IPC$" 2>&1
+        if ($LASTEXITCODE -eq 0 -or $netResult -like "*already*" -or $netResult -like "*successfully*") {
+          Start-Process explorer $uncPath
+          Write-Output "SUCCESS: Connected and opened $uncPath"
+          exit 0
+        }
+      } catch {
+        Write-Host "Net use method failed: $($_.Exception.Message)"
+      }
+      
+      # Method 3: Try with explicit credential prompt
+      try {
+        Write-Host "Trying with credential prompt..."
+        $cmdPath = "\\\\$computerName\\C$"
+        Start-Process "explorer" -ArgumentList $cmdPath -Verb RunAs
+        Write-Output "SUCCESS: Opened $uncPath with elevated credentials"
+        exit 0
+      } catch {
+        Write-Host "Elevated access failed: $($_.Exception.Message)"
+      }
+      
+      # Method 4: Last resort - try to map drive temporarily
+      try {
+        Write-Host "Attempting temporary drive mapping..."
+        $drive = Get-ChildItem function:[d-z]: -n | Where-Object { !(Test-Path $_) } | Select-Object -First 1
+        if ($drive) {
+          $mapResult = net use "$drive" "\\\\$computerName\\C$" 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            Start-Process explorer $drive
+            # Clean up the mapping after a delay
+            Start-Job { Start-Sleep 5; net use "$using:drive" /delete } | Out-Null
+            Write-Output "SUCCESS: Mapped and opened drive $drive"
+            exit 0
+          }
+        }
+      } catch {
+        Write-Host "Drive mapping failed: $($_.Exception.Message)"
+      }
+      
+      Write-Output "ERROR: All access methods failed. Ensure you have administrative privileges on $computerName and the computer is accessible. Try running ActV as administrator or ensure your current account has admin rights on the target computer."
+      
+    } catch {
+      Write-Output "ERROR: Unexpected error: $($_.Exception.Message)"
+    }
+  `;
+
+  try {
+    const output = await executePowerShell(psScript);
+    if (output.startsWith('ERROR:')) {
+      return { success: false, error: output.substring(6).trim() };
+    }
+    if (output.startsWith('SUCCESS:')) {
+      return { success: true, message: output.substring(8).trim() };
+    }
+    return { success: false, error: 'Failed to access C$ share. Try running ActV as administrator.' };
+  } catch (e) {
+    return { success: false, error: `Failed to execute C$ access: ${e.message}` };
+  }
+});
+
 // Add User to Group
 ipcMain.handle('add-user-to-group', async (event, config, userData) => {
   console.log('Adding user to group:', userData.username, 'to group:', userData.groupName);

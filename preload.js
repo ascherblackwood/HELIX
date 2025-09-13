@@ -47,6 +47,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   testPrinterServer: (serverPath) => ipcRenderer.invoke('test-printer-server', serverPath),
   openPrinterServer: (serverPath) => ipcRenderer.invoke('open-printer-server', serverPath),
   
+  // File System Access
+  openComputerCDrive: (computerName) => ipcRenderer.invoke('open-computer-c-drive', computerName),
+  
   // Admin Utilities
   launchADUC: (config) => ipcRenderer.invoke('launch-aduc', config),
 
