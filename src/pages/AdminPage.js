@@ -163,7 +163,7 @@ const AdminPage = () => {
       { timestamp: new Date(Date.now() - 600000).toISOString(), level: 'INFO', message: 'AD counts retrieved successfully' },
       { timestamp: new Date(Date.now() - 900000).toISOString(), level: 'WARN', message: 'Connection timeout detected, retrying...' },
       { timestamp: new Date(Date.now() - 1200000).toISOString(), level: 'INFO', message: 'User authentication successful' },
-      { timestamp: new Date(Date.now() - 1500000).toISOString(), level: 'INFO', message: 'Act.V v3.1 initialized' }
+      { timestamp: new Date(Date.now() - 1500000).toISOString(), level: 'INFO', message: 'Act.V v3.3.1 initialized' }
     ];
 
     const logText = logData.map(log => 
@@ -187,7 +187,7 @@ const AdminPage = () => {
       {/* Page Title */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Act.V - Administrative Tools</h1>
-        <p className="mt-2 text-gray-600">Manage and monitor your Active Directory infrastructure with Act.V v3.1</p>
+        <p className="mt-2 text-gray-600">Manage and monitor your Active Directory infrastructure with Act.V v3.3.1</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

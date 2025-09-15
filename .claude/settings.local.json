@@ -7,7 +7,13 @@
       "Bash(npm run:*)",
       "Bash(taskkill:*)",
       "Bash(powershell:*)",
-      "Bash(./dist-build/ActV-v3.2.1.exe)"
+      "Bash(./dist-build/ActV-v3.2.1.exe)",
+      "Bash(npx electron:*)",
+      "Bash(./dist-build/ActV-v3.3.1.exe)",
+      "Bash(npx asar list:*)",
+      "Bash(./dist-fixed/ActV-v3.3.1.exe)",
+      "Bash(./dist-final/ActV-v3.3.1.exe)",
+      "Bash(./dist-build/ActV-v3.3.1-final.exe)"
     ],
     "deny": [],
     "ask": []

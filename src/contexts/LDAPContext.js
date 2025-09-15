@@ -332,10 +332,32 @@ export const LDAPProvider = ({ children }) => {
           computerName: computer.cn,
           os: computer.operatingSystem || 'Unknown',
           osVersion: computer.operatingSystemVersion,
-          // Prefer friendly date; handle PowerShell /Date(…)/ and FILETIME
-          lastLogon: (() => { const d = parseAdDateToDate(computer.lastLogonDate || computer.lastLogonTimestamp); return formatDateLocal(d); })(),
-          lastLogonAt: toISOOrNull(computer.lastLogonDate || computer.lastLogonTimestamp),
-          lastLogonAgo: (() => { const d = parseAdDateToDate(computer.lastLogonDate || computer.lastLogonTimestamp); return d ? relativeTime(d) : 'Never'; })(),
+          // Prefer real boot time if available, otherwise use AD last logon data
+          lastLogon: (() => {
+            const realBootTime = computer.realLastBootTime;
+            if (realBootTime) {
+              const d = new Date(realBootTime);
+              return d && !isNaN(d.getTime()) ? formatDateLocal(d) : formatDateLocal(parseAdDateToDate(computer.lastLogonDate || computer.lastLogonTimestamp));
+            }
+            return formatDateLocal(parseAdDateToDate(computer.lastLogonDate || computer.lastLogonTimestamp));
+          })(),
+          lastLogonAt: (() => {
+            const realBootTime = computer.realLastBootTime;
+            if (realBootTime) {
+              const d = new Date(realBootTime);
+              return d && !isNaN(d.getTime()) ? d.toISOString() : toISOOrNull(computer.lastLogonDate || computer.lastLogonTimestamp);
+            }
+            return toISOOrNull(computer.lastLogonDate || computer.lastLogonTimestamp);
+          })(),
+          lastLogonAgo: (() => {
+            const realBootTime = computer.realLastBootTime;
+            if (realBootTime) {
+              const d = new Date(realBootTime);
+              return d && !isNaN(d.getTime()) ? relativeTime(d) : (parseAdDateToDate(computer.lastLogonDate || computer.lastLogonTimestamp) ? relativeTime(parseAdDateToDate(computer.lastLogonDate || computer.lastLogonTimestamp)) : 'Never');
+            }
+            const d = parseAdDateToDate(computer.lastLogonDate || computer.lastLogonTimestamp);
+            return d ? relativeTime(d) : 'Never';
+          })(),
           status: (computer.userAccountControl & 2) ? 'Disabled' : 'Active',
 
           // Additional information from AD
