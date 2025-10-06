@@ -13,7 +13,21 @@
       "Bash(npx asar list:*)",
       "Bash(./dist-fixed/ActV-v3.3.1.exe)",
       "Bash(./dist-final/ActV-v3.3.1.exe)",
-      "Bash(./dist-build/ActV-v3.3.1-final.exe)"
+      "Bash(./dist-build/ActV-v3.3.1-final.exe)",
+      "Bash(node:*)",
+      "Bash(find:*)",
+      "Bash(dir:*)",
+      "Bash(copy:*)",
+      "Bash(cmd /c copy:*)",
+      "Bash(cscript:*)",
+      "Bash(./dist-build/ActV-v3.3.1.exe:*)",
+      "Bash(electron-builder:*)",
+      "Bash(cmd /c \"dir dist-build\\ActV-v3.3.1.exe\")",
+      "Bash(npx:*)",
+      "Bash(if exist build rmdir /s /q build)",
+      "Bash(if exist dist-build rmdir /s /q dist-build)",
+      "Bash(cmd /c:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []

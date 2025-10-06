@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ArrowPathIcon, 
-  DocumentArrowDownIcon, 
+import {
+  ArrowPathIcon,
+  DocumentArrowDownIcon,
   DocumentTextIcon,
   CheckCircleIcon,
   ExclamationCircleIcon,
@@ -9,6 +9,7 @@ import {
   ServerIcon
 } from '@heroicons/react/24/outline';
 import { useLDAP } from '../contexts/LDAPContext';
+import PrinterManagementModal from '../components/PrinterManagementModal';
 
 const AdminPage = () => {
   const { isConnected, authInfo, loading, getADCounts, getOUCounts, connectionConfig } = useLDAP();
@@ -103,6 +104,7 @@ const AdminPage = () => {
 
   const [backupInProgress, setBackupInProgress] = useState(false);
   const [backupResult, setBackupResult] = useState(null);
+  const [showPrinterModal, setShowPrinterModal] = useState(false);
 
   const handleBackup = async () => {
     if (backupInProgress) return;
@@ -120,7 +122,7 @@ const AdminPage = () => {
           username: connectionConfig?.username || 'Unknown'
         },
         systemStats,
-        appVersion: '3.3.1',
+        appVersion: '3.4.2',
         backupType: 'Configuration and Settings'
       };
 
@@ -163,7 +165,7 @@ const AdminPage = () => {
       { timestamp: new Date(Date.now() - 600000).toISOString(), level: 'INFO', message: 'AD counts retrieved successfully' },
       { timestamp: new Date(Date.now() - 900000).toISOString(), level: 'WARN', message: 'Connection timeout detected, retrying...' },
       { timestamp: new Date(Date.now() - 1200000).toISOString(), level: 'INFO', message: 'User authentication successful' },
-      { timestamp: new Date(Date.now() - 1500000).toISOString(), level: 'INFO', message: 'Act.V v3.3.1 initialized' }
+      { timestamp: new Date(Date.now() - 1500000).toISOString(), level: 'INFO', message: 'Act.V v3.4.2 initialized' }
     ];
 
     const logText = logData.map(log => 
@@ -187,7 +189,7 @@ const AdminPage = () => {
       {/* Page Title */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Act.V - Administrative Tools</h1>
-        <p className="mt-2 text-gray-600">Manage and monitor your Active Directory infrastructure with Act.V v3.3.1</p>
+        <p className="mt-2 text-gray-600">Manage and monitor your Active Directory infrastructure with Act.V v3.4.2</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -382,8 +384,27 @@ const AdminPage = () => {
             >
               ADUC
             </button>
-            <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">AD Sites & Services</button>
-            <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">Group Policy</button>
+            <button
+              onClick={async () => {
+                try {
+                  const res = await window.electronAPI.launchPowerShellx86(connectionConfig);
+                  if (!res?.success) {
+                    alert(res?.error || 'Failed to launch PowerShell x86');
+                  }
+                } catch (e) {
+                  alert('Failed to launch PowerShell x86');
+                }
+              }}
+              className="px-3 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              PowerShell
+            </button>
+            <button
+              onClick={() => setShowPrinterModal(true)}
+              className="px-3 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              Printer Installation
+            </button>
             <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">DNS Manager</button>
             <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">DHCP Manager</button>
             <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">Event Viewer</button>
@@ -392,6 +413,12 @@ const AdminPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Printer Management Modal */}
+      <PrinterManagementModal
+        isOpen={showPrinterModal}
+        onClose={() => setShowPrinterModal(false)}
+      />
     </div>
   );
 };

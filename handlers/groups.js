@@ -1,6 +1,6 @@
 const { ipcMain } = require('electron');
 const path = require('path');
-const { executePowerShell, buildAuthParam, ensureKerberosIfRequired } = require(path.join(__dirname, '..', 'utils', 'powershell'));
+const { executePowerShell, ensureKerberosIfRequired } = require(path.join(__dirname, '..', 'utils', 'powershell'));
 
 /**
  * Register group management-related IPC handlers
@@ -24,7 +24,10 @@ function registerGroupHandlers() {
     try {
       await ensureKerberosIfRequired(config);
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
 
       // Determine OU path - use parentOU if set, otherwise Users container by default
       let ouPath = 'CN=Users';
@@ -62,7 +65,7 @@ function registerGroupHandlers() {
       `;
 
       console.log('Executing PowerShell for group creation...');
-      const result = await executePowerShell(createGroupCommand);
+      const result = await executePowerShell(createGroupCommand, { env: credEnv, useCredentialPrelude: true });
       if (result.includes('SUCCESS:')) {
         return {
           success: true,
@@ -95,7 +98,10 @@ function registerGroupHandlers() {
 
     try {
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
 
       const ouCommand = `
         try {
@@ -151,7 +157,7 @@ function registerGroupHandlers() {
         }
       `;
 
-      const ouTreeJson = await executePowerShell(ouCommand);
+      const ouTreeJson = await executePowerShell(ouCommand, { env: credEnv, useCredentialPrelude: true });
       let ouObjects;
       try {
         ouObjects = JSON.parse(ouTreeJson);

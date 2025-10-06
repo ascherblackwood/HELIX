@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLDAP } from '../contexts/LDAPContext';
-import { 
+import {
   XMarkIcon,
   ComputerDesktopIcon,
   ServerIcon,
@@ -188,10 +188,93 @@ const ComputerDetailModal = ({ computer, isOpen, onClose }) => {
     }
   };
 
-  const handleRemoteIn = () => {
-    // TODO: Implement RDP/Dameware connection
-    console.log('Connecting to:', computer.computerName);
-    alert(`Opening remote connection to ${computer.computerName}`);
+  const handleRemoteIn = async () => {
+    try {
+      setActionStatus('Initiating RDP connection...');
+      const result = await window.electronAPI?.connectRDP?.(computer.computerName);
+      if (result?.success) {
+        setActionStatus(`RDP connection initiated to ${computer.computerName}`);
+      } else {
+        setActionStatus(`Failed to connect via RDP: ${result?.error || 'Unknown error'}`);
+      }
+    } catch (e) {
+      setActionStatus(`Error connecting via RDP: ${e.message}`);
+    } finally {
+      setTimeout(() => setActionStatus(''), 4000);
+    }
+  };
+
+  const handleDeleteComputer = async () => {
+    console.log('=== FRONTEND DELETE BUTTON CLICKED ===');
+    console.log('Computer:', computer?.computerName);
+    console.log('Connection status:', isConnected);
+
+    // First confirmation dialog
+    const confirmed = window.confirm(
+      `⚠️ WARNING: Are you sure you want to delete computer "${computer.computerName}" from Active Directory?\n\n` +
+      `This action will:\n` +
+      `• Permanently remove the computer object from AD\n` +
+      `• Remove all group memberships\n` +
+      `• Cannot be undone\n\n` +
+      `Click OK to proceed with deletion.`
+    );
+
+    if (!confirmed) {
+      console.log('User cancelled deletion at first prompt');
+      return;
+    }
+
+    // Second confirmation - require typing computer name
+    const confirmName = window.prompt(
+      `To confirm deletion, please type the computer name exactly as shown:\n\n${computer.computerName}`
+    );
+
+    if (confirmName !== computer.computerName) {
+      setActionStatus('❌ Deletion cancelled - computer name did not match');
+      setTimeout(() => setActionStatus(''), 4000);
+      return;
+    }
+
+    // Check connection status
+    if (!isConnected || !connectionConfig) {
+      setActionStatus('❌ Error: Not connected to Active Directory');
+      setTimeout(() => setActionStatus(''), 4000);
+      return;
+    }
+
+    try {
+      setActionStatus('🔄 Deleting computer from Active Directory...');
+      console.log('Starting delete operation with config:', {
+        server: connectionConfig?.server,
+        hasUsername: !!connectionConfig?.username
+      });
+
+      const result = await window.electronAPI?.deleteADComputer?.(connectionConfig, {
+        computerName: computer.computerName
+      });
+
+      console.log('Delete operation result:', result);
+
+      if (result?.success) {
+        setActionStatus(`✅ Computer ${computer.computerName} successfully deleted from Active Directory`);
+        // Close modal and refresh after successful deletion
+        setTimeout(() => {
+          onClose();
+          if (window.location.pathname === '/computers') {
+            window.location.reload();
+          }
+        }, 2000);
+      } else {
+        const errorMsg = result?.error || 'Unknown error occurred';
+        console.error('Delete operation failed:', errorMsg);
+        setActionStatus(`❌ Failed to delete computer: ${errorMsg}`);
+      }
+    } catch (e) {
+      console.error('Frontend exception during delete:', e);
+      setActionStatus(`❌ Error deleting computer: ${e.message}`);
+    } finally {
+      setTimeout(() => setActionStatus(''), 10000);
+    }
   };
 
   const handleOpenCDrive = async () => {
@@ -690,6 +773,14 @@ const ComputerDetailModal = ({ computer, isOpen, onClose }) => {
               >
                 <FolderOpenIcon className="w-4 h-4" />
                 <span>Open C$ Share</span>
+              </button>
+
+              <button
+                onClick={handleDeleteComputer}
+                className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <TrashIcon className="w-4 h-4" />
+                <span>Delete from AD</span>
               </button>
             </div>
           </div>

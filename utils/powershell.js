@@ -3,11 +3,37 @@ const { spawn } = require('child_process');
 /**
  * Execute PowerShell commands with proper error handling
  * @param {string} command - PowerShell command to execute
+ * @param {Object} options - Optional execution options
+ * @param {Object} options.env - Environment variables
+ * @param {boolean} options.useCredentialPrelude - Whether to add credential prelude
  * @returns {Promise<string>} - Command output
  */
-function executePowerShell(command) {
+function executePowerShell(command, options = {}) {
   return new Promise((resolve, reject) => {
-    const ps = spawn('powershell', ['-Command', command]);
+    let finalCommand = command;
+    let environment = { ...process.env };
+
+    // Add environment variables if provided
+    if (options.env) {
+      environment = { ...environment, ...options.env };
+    }
+
+    // Add credential prelude if requested and credentials are provided
+    if (options.useCredentialPrelude && options.env && options.env.ACTV_USER && options.env.ACTV_PASS) {
+      const credentialPrelude = `
+        if ($env:ACTV_USER -and $env:ACTV_PASS) {
+          $ACTV_CRED = New-Object System.Management.Automation.PSCredential (
+            $env:ACTV_USER,
+            (ConvertTo-SecureString $env:ACTV_PASS -AsPlainText -Force)
+          )
+        }
+      `;
+      finalCommand = credentialPrelude + '\n' + command;
+    }
+
+    const ps = spawn('powershell', ['-Command', finalCommand], {
+      env: environment
+    });
     let output = '';
     let error = '';
 

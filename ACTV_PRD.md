@@ -1,8 +1,8 @@
 # ActV - Active Directory Management Tool
 ## Product Requirements Document (PRD)
 
-**Version:** 3.3.1  
-**Date:** September 2025  
+**Version:** 3.4.2
+**Date:** October 2025
 **Author:** ActV Team  
 
 ---
@@ -78,9 +78,9 @@ Simplify complex AD operations through an elegant desktop interface while provid
 ### 4.3 Build & Packaging (Current Build)
 - Builder: electron-builder 24.x
 - Target: Windows portable (single-file .exe)
-- Output: `dist-build/ActV-v3.2.1.exe` (filename reflects semver without leading zeros)
+- Output: `dist-build/ActV-v3.4.2.exe` (filename reflects semver without leading zeros)
 - ASAR: enabled
-- Included: `build/**`, `main.js`, `preload.js`, `node_modules/**`, `src/assets/**`
+- Included: `build/**`, `main.js`, `preload.js`, `node_modules/**`, `src/assets/**`, `handlers/**`, `utils/**`, `PrinterManagement.ps1`
 - Icon: `src/assets/actv.ico`
 - App ID: `com.actv.admanager`
 - Size: ~85MB portable executable
@@ -360,7 +360,7 @@ All reports generate as downloadable Excel (.xls) files with professional format
 ## 9. Deployment Strategy
 
 ### 9.1 Distribution Method
-- **Portable Executable:** Single ActV-v3.2.1.exe file (~85MB)
+- **Portable Executable:** Single ActV-v3.4.1.exe file (~85MB)
 - **No Installation Required:** Copy and run deployment model
 - **Self-Contained:** All dependencies included in executable
 - **Version Control:** Clear version identification in filename and UI
@@ -541,7 +541,7 @@ All reports generate as downloadable Excel (.xls) files with professional format
 
 ---
 
-*This PRD reflects ActV v3.2.1 as of September 2025 and serves as the comprehensive specification for current and planned functionality.*
+*This PRD reflects ActV v3.4.1 as of October 2025 and serves as the comprehensive specification for current and planned functionality.*
 
 ## 13. Release Notes
 
@@ -593,8 +593,8 @@ All reports generate as downloadable Excel (.xls) files with professional format
 - **Professional Modal Design**: Consistent styling with improved user experience
 
 **📦 Build & Distribution:**
-- **Updated Version**: v3.2.1 (from v3.02.01) following semantic versioning
-- **Build Output**: `dist-build/ActV-v3.2.1.exe` (~85MB portable executable)
+- **Updated Version**: v3.4.1 (from v3.3.1) following semantic versioning
+- **Build Output**: `dist-build/ActV-v3.4.1.exe` (~85MB portable executable)
 - **No Installation Required**: Single-file portable deployment maintained
 - **Enhanced API Surface**: 6 new IPC handlers for extended functionality
 

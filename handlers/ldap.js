@@ -1,6 +1,6 @@
 const { ipcMain } = require('electron');
 const path = require('path');
-const { executePowerShell, buildAuthParam } = require(path.join(__dirname, '..', 'utils', 'powershell'));
+const { executePowerShell } = require(path.join(__dirname, '..', 'utils', 'powershell'));
 
 /**
  * Register LDAP search and AD query handlers
@@ -20,7 +20,10 @@ function registerLdapHandlers() {
 
     try {
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
       const filter = searchOptions?.options?.filter || '';
       const requestedBase = (searchOptions?.baseDN || '').toString();
 
@@ -72,7 +75,7 @@ function registerLdapHandlers() {
           }
         `;
 
-        const userDataJson = await executePowerShell(userCommand);
+        const userDataJson = await executePowerShell(userCommand, { env: credEnv, useCredentialPrelude: true });
         let userData = [];
 
         if (userDataJson && userDataJson !== 'null') {
@@ -118,6 +121,17 @@ function registerLdapHandlers() {
 
       } else if (filter.includes('computer')) {
         // Search for computers
+        // Enhance: when enriching with real boot time, also pass credentials if provided
+        // so we can query Win32_OperatingSystem remotely even when the caller isn't
+        // already an admin on the target machine.
+        const buildCimCredBlock = credEnv
+          ? `
+            $cimCred = $ACTV_CRED
+          `
+          : `
+            $cimCred = $null
+          `;
+
         const computerCommand = `
           try {
             Import-Module ActiveDirectory -ErrorAction Stop
@@ -125,6 +139,7 @@ function registerLdapHandlers() {
 
             # For each computer, try to get actual last boot time
             $enrichedComputers = @()
+            ${buildCimCredBlock}
             foreach ($computer in $computers) {
               $computerObj = $computer | Select-Object @{Name='cn';Expression={$_.Name}},
                                                     operatingSystem,
@@ -147,7 +162,28 @@ function registerLdapHandlers() {
                 if ($computer.Enabled -and $computer.dNSHostName) {
                   $pingResult = Test-Connection -ComputerName $computer.dNSHostName -Count 1 -Quiet -TimeoutSeconds 2
                   if ($pingResult) {
-                    $bootTime = Get-CimInstance -ComputerName $computer.dNSHostName -ClassName Win32_OperatingSystem -Property LastBootUpTime -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LastBootUpTime
+                    # Build a CimSession so we can pass credentials when available
+                    try {
+                      if ($cimCred -ne $null) {
+                        $cimSession = New-CimSession -ComputerName $computer.dNSHostName -Credential $cimCred -Authentication Negotiate -OperationTimeoutSec 5 -ErrorAction SilentlyContinue
+                      } else {
+                        $cimSession = New-CimSession -ComputerName $computer.dNSHostName -Authentication Negotiate -OperationTimeoutSec 5 -ErrorAction SilentlyContinue
+                      }
+                    } catch {
+                      $cimSession = $null
+                    }
+
+                    $bootTime = $null
+                    if ($cimSession) {
+                      try {
+                        $bootTime = Get-CimInstance -CimSession $cimSession -ClassName Win32_OperatingSystem -Property LastBootUpTime -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LastBootUpTime
+                      } finally {
+                        try { Remove-CimSession -CimSession $cimSession -ErrorAction SilentlyContinue } catch {}
+                      }
+                    } else {
+                      # Fallback without session (uses caller's creds)
+                      $bootTime = Get-CimInstance -ComputerName $computer.dNSHostName -ClassName Win32_OperatingSystem -Property LastBootUpTime -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LastBootUpTime
+                    }
                     if ($bootTime) {
                       $computerObj | Add-Member -NotePropertyName 'realLastBootTime' -NotePropertyValue $bootTime.ToString('yyyy-MM-ddTHH:mm:ss.fffzzz')
                     }
@@ -166,7 +202,7 @@ function registerLdapHandlers() {
           }
         `;
 
-        const computerDataJson = await executePowerShell(computerCommand);
+        const computerDataJson = await executePowerShell(computerCommand, { env: credEnv, useCredentialPrelude: true });
         let computerData = [];
 
         if (computerDataJson && computerDataJson !== 'null') {
@@ -194,7 +230,7 @@ function registerLdapHandlers() {
           }
         `;
 
-        const groupDataJson = await executePowerShell(groupCommand);
+        const groupDataJson = await executePowerShell(groupCommand, { env: credEnv, useCredentialPrelude: true });
         let groupData = [];
 
         if (groupDataJson && groupDataJson !== 'null') {
@@ -230,7 +266,10 @@ function registerLdapHandlers() {
     try {
       // Use PowerShell to query AD counts
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
       const searchBase = (config.parentOU && config.parentOU.trim() !== '') ? `-SearchBase "${config.parentOU}"` : '';
 
       const userCommand = `
@@ -265,9 +304,9 @@ function registerLdapHandlers() {
 
       // Execute PowerShell commands concurrently
       const [userCountStr, computerCountStr, groupCountStr] = await Promise.all([
-        executePowerShell(userCommand).catch(() => '0'),
-        executePowerShell(computerCommand).catch(() => '0'),
-        executePowerShell(groupCommand).catch(() => '0')
+        executePowerShell(userCommand, { env: credEnv, useCredentialPrelude: true }).catch(() => '0'),
+        executePowerShell(computerCommand, { env: credEnv, useCredentialPrelude: true }).catch(() => '0'),
+        executePowerShell(groupCommand, { env: credEnv, useCredentialPrelude: true }).catch(() => '0')
       ]);
 
       const userCount = parseInt(userCountStr) || 0;

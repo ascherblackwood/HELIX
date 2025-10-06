@@ -1,6 +1,6 @@
 {
   "name": "actv-ad-manager",
-  "version": "3.3.1",
+  "version": "3.4.2",
   "description": "Act.V - Active Vector AD Management Console",
   "author": "Act.V Team",
   "main": "main.js",
@@ -68,7 +68,8 @@
       "node_modules/**/*",
       "src/assets/**/*",
       "handlers/**/*",
-      "utils/**/*"
+      "utils/**/*",
+      "PrinterManagement.ps1"
     ],
     "win": {
       "target": [

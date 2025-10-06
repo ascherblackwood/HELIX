@@ -1,12 +1,13 @@
 const { ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
-const { executePowerShell, buildAuthParam, ensureKerberosIfRequired } = require(path.join(__dirname, '..', 'utils', 'powershell'));
+const { executePowerShell, ensureKerberosIfRequired } = require(path.join(__dirname, '..', 'utils', 'powershell'));
 
 /**
  * Register computer management-related IPC handlers
  */
 function registerComputerHandlers() {
+  console.log('=== REGISTERING COMPUTER HANDLERS ===');
   // Create AD Computer
   ipcMain.handle('create-ad-computer', async (event, config, computerData) => {
     console.log('Creating AD computer:', computerData.computerName);
@@ -25,7 +26,10 @@ function registerComputerHandlers() {
     try {
       await ensureKerberosIfRequired(config);
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
 
       // Determine OU path - use parentOU if set, otherwise use default Computers container
       let ouPath = 'CN=Computers';
@@ -77,7 +81,7 @@ function registerComputerHandlers() {
       `;
 
       console.log('Executing PowerShell command for computer creation...');
-      const result = await executePowerShell(createComputerCommand);
+      const result = await executePowerShell(createComputerCommand, { env: credEnv, useCredentialPrelude: true });
       console.log('PowerShell result:', result);
 
       if (result.includes('SUCCESS:')) {
@@ -133,7 +137,10 @@ function registerComputerHandlers() {
     try {
       await ensureKerberosIfRequired(config);
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
 
       // Only support description for now
       const field = String(computerData.field).toLowerCase();
@@ -154,7 +161,7 @@ function registerComputerHandlers() {
           Write-Error $_.Exception.Message
         }
       `;
-      const result = await executePowerShell(ps);
+        const result = await executePowerShell(ps, { env: credEnv, useCredentialPrelude: true });
       if (result.includes('OK')) {
         return { success: true, message: 'Computer updated' };
       }
@@ -445,6 +452,228 @@ function registerComputerHandlers() {
         resolve({ success: false, error: 'Open C$ share timeout' });
       }, 5000);
     });
+  });
+
+  // Connect to Computer via RDP
+  ipcMain.handle('connect-rdp', async (event, computerName) => {
+    if (!computerName) {
+      return { success: false, error: 'Computer name is required' };
+    }
+
+    return new Promise((resolve) => {
+      // Use mstsc to start RDP connection
+      const process = spawn('mstsc', [`/v:${computerName}`]);
+
+      process.on('close', (code) => {
+        resolve({ success: true, message: `RDP connection initiated to ${computerName}` });
+      });
+
+      process.on('error', (error) => {
+        resolve({ success: false, error: `Failed to start RDP connection: ${error.message}` });
+      });
+
+      // Resolve immediately since mstsc will open in a new window
+      setTimeout(() => {
+        resolve({ success: true, message: `RDP connection initiated to ${computerName}` });
+      }, 1000);
+    });
+  });
+
+  // Delete AD Computer
+  console.log('Registering delete-ad-computer handler...');
+  ipcMain.handle('delete-ad-computer', async (event, config, computerData) => {
+    console.log('=== DELETE COMPUTER HANDLER CALLED ===');
+    console.log('Computer to delete:', computerData?.computerName);
+    console.log('Config received:', !!config);
+    console.log('Config server:', config?.server);
+    console.log('Config username:', config?.username ? 'PRESENT' : 'MISSING');
+
+    if (!computerData?.computerName) {
+      console.log('ERROR: No computer name provided');
+      return { success: false, error: 'No computer name provided' };
+    }
+
+    if (!config || !config.server) {
+      console.log('ERROR: No server configuration');
+      return { success: false, error: 'Invalid connection configuration. Server is required.' };
+    }
+
+    try {
+      console.log('Setting up AD connection parameters...');
+
+      // Setup authentication parameters similar to other working handlers
+      await ensureKerberosIfRequired(config);
+      const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
+
+      console.log('Auth setup:', {
+        serverParam,
+        authParam,
+        hasCredentials: !!credEnv,
+        useKerberos: config.useKerberos,
+        kerberosOnly: config.kerberosOnly
+      });
+
+      const deleteComputerCommand = `
+        try {
+          $ErrorActionPreference = 'Stop'
+          Write-Output "=== Starting AD Computer Deletion ==="
+
+          # Import Active Directory module
+          Import-Module ActiveDirectory -ErrorAction Stop
+          Write-Output "Active Directory module imported"
+
+          # First, verify the computer exists
+          Write-Output "Searching for computer: ${computerData.computerName}"
+          try {
+            $computer = Get-ADComputer -Identity "${computerData.computerName}" ${serverParam} ${authParam} -ErrorAction Stop
+            Write-Output "Found computer: $($computer.Name) in $($computer.DistinguishedName)"
+          } catch {
+            Write-Output "ERROR: Computer not found: $($_.Exception.Message)"
+            exit 1
+          }
+
+          # Delete the computer
+          Write-Output "Deleting computer from Active Directory..."
+          Remove-ADComputer -Identity "${computerData.computerName}" ${serverParam} ${authParam} -Confirm:$false -ErrorAction Stop
+
+          # Verify deletion
+          Write-Output "Verifying deletion..."
+          try {
+            $checkComputer = Get-ADComputer -Identity "${computerData.computerName}" ${serverParam} ${authParam} -ErrorAction Stop
+            Write-Output "ERROR: Computer still exists after deletion"
+            exit 1
+          } catch {
+            Write-Output "SUCCESS: Computer ${computerData.computerName} successfully deleted from Active Directory"
+          }
+
+        } catch {
+          Write-Output "ERROR: $($_.Exception.Message)"
+          Write-Output "ERROR_TYPE: $($_.Exception.GetType().FullName)"
+          exit 1
+        }
+      `;
+
+      console.log('Executing AD delete command...');
+      const result = await executePowerShell(deleteComputerCommand, { env: credEnv, useCredentialPrelude: true });
+      console.log('PowerShell execution result:', result);
+
+      if (result.includes('SUCCESS:') && result.includes('successfully deleted')) {
+        console.log('Delete operation successful');
+        return {
+          success: true,
+          message: `Computer ${computerData.computerName} successfully deleted from Active Directory`
+        };
+      } else if (result.includes('ERROR:')) {
+        console.log('Delete operation failed with error');
+        const errorLines = result.split('\n').filter(line => line.includes('ERROR:'));
+        const mainError = errorLines[0] || result;
+        const errorMessage = mainError.replace('ERROR:', '').trim();
+        return {
+          success: false,
+          error: errorMessage || 'Failed to delete computer from Active Directory'
+        };
+      } else {
+        console.log('Delete operation completed with unexpected result');
+        return {
+          success: false,
+          error: `Unexpected result from delete operation: ${result}`
+        };
+      }
+
+    } catch (error) {
+      console.error('Delete computer error:', error);
+      return {
+        success: false,
+        error: `Failed to delete computer: ${error.message}`
+      };
+    }
+  });
+
+  // Get Printers from Print Server
+  ipcMain.handle('get-printers', async (event, serverName, searchQuery) => {
+    if (!serverName) {
+      return { success: false, error: 'Server name is required' };
+    }
+
+    const psScript = `
+      try {
+        $ErrorActionPreference = 'Stop'
+        $serverName = '${serverName.replace(/\\/g, '\\\\')}'
+        $searchQuery = '${(searchQuery || '').replace(/'/g, "''")}'
+
+        Write-Host "Fetching printers from $serverName..."
+
+        $printers = Get-Printer -ComputerName $serverName -ErrorAction Stop | Select-Object -ExpandProperty Name
+
+        if ($searchQuery) {
+          $printers = $printers | Where-Object { $_ -like "*$searchQuery*" }
+        }
+
+        if ($printers) {
+          $printers | ConvertTo-Json -Compress
+        } else {
+          Write-Output '[]'
+        }
+      } catch {
+        Write-Output "ERROR: $($_.Exception.Message)"
+      }
+    `;
+
+    try {
+      const output = await executePowerShell(psScript);
+      if (output.startsWith('ERROR:')) {
+        return { success: false, error: output.substring(6).trim() };
+      }
+
+      const printers = JSON.parse(output || '[]');
+      return {
+        success: true,
+        printers: Array.isArray(printers) ? printers : [printers]
+      };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  // Install Printer
+  ipcMain.handle('install-printer', async (event, printerPath) => {
+    if (!printerPath) {
+      return { success: false, error: 'Printer path is required' };
+    }
+
+    const psScript = `
+      try {
+        $ErrorActionPreference = 'Stop'
+        $printerPath = '${printerPath.replace(/\\/g, '\\\\')}'
+
+        Write-Host "Installing printer: $printerPath"
+
+        # Use rundll32 to install the printer
+        $process = Start-Process -FilePath "rundll32" -ArgumentList "printui.dll,PrintUIEntry /in /n\`"$printerPath\`"" -Wait -PassThru -NoNewWindow
+
+        if ($process.ExitCode -eq 0) {
+          Write-Output 'SUCCESS'
+        } else {
+          Write-Output "ERROR: Installation failed with exit code $($process.ExitCode)"
+        }
+      } catch {
+        Write-Output "ERROR: $($_.Exception.Message)"
+      }
+    `;
+
+    try {
+      const output = await executePowerShell(psScript);
+      if (output.startsWith('ERROR:')) {
+        return { success: false, error: output.substring(6).trim() };
+      }
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
   });
 }
 

@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Computer Management Operations
   createADComputer: (config, computerData) => ipcRenderer.invoke('create-ad-computer', config, computerData),
   updateADComputer: (config, computerData) => ipcRenderer.invoke('update-ad-computer', config, computerData),
+  deleteADComputer: (config, computerData) => ipcRenderer.invoke('delete-ad-computer', config, computerData),
   
   // Remote Management Operations
   testWinRM: (computerName) => ipcRenderer.invoke('test-winrm', computerName),
@@ -46,12 +47,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Printer Server Management
   testPrinterServer: (serverPath) => ipcRenderer.invoke('test-printer-server', serverPath),
   openPrinterServer: (serverPath) => ipcRenderer.invoke('open-printer-server', serverPath),
+  getPrinters: (serverName, searchQuery) => ipcRenderer.invoke('get-printers', serverName, searchQuery),
+  installPrinter: (printerPath) => ipcRenderer.invoke('install-printer', printerPath),
   
   // File System Access
   openComputerCDrive: (computerName) => ipcRenderer.invoke('open-computer-c-drive', computerName),
+
+  // Remote Desktop Connection
+  connectRDP: (computerName) => ipcRenderer.invoke('connect-rdp', computerName),
   
   // Admin Utilities
   launchADUC: (config) => ipcRenderer.invoke('launch-aduc', config),
+  launchPowerShellx86: (config) => ipcRenderer.invoke('launch-powershell-x86', config),
 
   // Remote session utilities
   logoffUserSession: (computerName, username) => ipcRenderer.invoke('logoff-user-session', computerName, username),

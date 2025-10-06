@@ -1,6 +1,6 @@
 const { ipcMain } = require('electron');
 const path = require('path');
-const { executePowerShell, buildAuthParam, ensureKerberosIfRequired, generateSecurePassword } = require(path.join(__dirname, '..', 'utils', 'powershell'));
+const { executePowerShell, ensureKerberosIfRequired, generateSecurePassword } = require(path.join(__dirname, '..', 'utils', 'powershell'));
 
 /**
  * Register user management-related IPC handlers
@@ -24,7 +24,10 @@ function registerUserHandlers() {
     try {
       await ensureKerberosIfRequired(config);
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
 
       // Determine OU path - use parentOU if set, otherwise use default Users container
       let ouPath = 'CN=Users';
@@ -93,7 +96,7 @@ function registerUserHandlers() {
         }
       `;
 
-      const result = await executePowerShell(createUserCommand);
+      const result = await executePowerShell(createUserCommand, { env: credEnv, useCredentialPrelude: true });
 
       if (result.includes('User created successfully')) {
         return {
@@ -161,7 +164,10 @@ function registerUserHandlers() {
     try {
       await ensureKerberosIfRequired(config);
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
 
       console.log('Updating user field:', userData.field, 'to:', userData.value);
 
@@ -190,7 +196,7 @@ function registerUserHandlers() {
       `;
 
       console.log('Executing PowerShell command for user update...');
-      const result = await executePowerShell(updateUserCommand);
+      const result = await executePowerShell(updateUserCommand, { env: credEnv, useCredentialPrelude: true });
       console.log('PowerShell result:', result);
 
       if (result.includes('SUCCESS:')) {
@@ -232,7 +238,10 @@ function registerUserHandlers() {
     try {
       await ensureKerberosIfRequired(config);
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
 
       // Generate a secure temporary password
       const tempPassword = generateSecurePassword();
@@ -276,7 +285,7 @@ function registerUserHandlers() {
       `;
 
       console.log('Executing PowerShell command for password reset...');
-      const result = await executePowerShell(resetPasswordCommand);
+      const result = await executePowerShell(resetPasswordCommand, { env: credEnv, useCredentialPrelude: true });
       console.log('PowerShell result:', result);
 
       if (result.includes('SUCCESS:')) {
@@ -323,7 +332,10 @@ function registerUserHandlers() {
     try {
       await ensureKerberosIfRequired(config);
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
       const action = userData.enable ? 'enable' : 'disable';
       const enableValue = userData.enable ? '$true' : '$false';
 
@@ -345,7 +357,7 @@ function registerUserHandlers() {
       `;
 
       console.log('Executing PowerShell command for account toggle...');
-      const result = await executePowerShell(toggleAccountCommand);
+      const result = await executePowerShell(toggleAccountCommand, { env: credEnv, useCredentialPrelude: true });
       console.log('PowerShell result:', result);
 
       if (result.includes('SUCCESS:')) {
@@ -388,7 +400,10 @@ function registerUserHandlers() {
     try {
       await ensureKerberosIfRequired(config);
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
 
       console.log('Adding user to group:', userData.username, 'to', userData.groupName);
 
@@ -408,7 +423,7 @@ function registerUserHandlers() {
       `;
 
       console.log('Executing PowerShell command for add to group...');
-      const result = await executePowerShell(addToGroupCommand);
+      const result = await executePowerShell(addToGroupCommand, { env: credEnv, useCredentialPrelude: true });
       console.log('PowerShell result:', result);
 
       if (result.includes('SUCCESS:')) {
@@ -450,7 +465,10 @@ function registerUserHandlers() {
     try {
       await ensureKerberosIfRequired(config);
       const serverParam = config.server.includes('.') ? `-Server "${config.server}"` : '';
-      const authParam = buildAuthParam(config);
+      const credEnv = (!config.useKerberos && !config.kerberosOnly && config.username && config.password)
+        ? { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) }
+        : undefined;
+      const authParam = credEnv ? '-Credential $ACTV_CRED -AuthType Negotiate' : '-AuthType Negotiate';
 
       console.log('Removing user from group:', userData.username, 'from', userData.groupName);
 
@@ -470,7 +488,7 @@ function registerUserHandlers() {
       `;
 
       console.log('Executing PowerShell command for remove from group...');
-      const result = await executePowerShell(removeFromGroupCommand);
+      const result = await executePowerShell(removeFromGroupCommand, { env: credEnv, useCredentialPrelude: true });
       console.log('PowerShell result:', result);
 
       if (result.includes('SUCCESS:')) {

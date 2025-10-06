@@ -157,22 +157,17 @@ function registerAuthHandlers() {
     const hasCreds = config && config.username && config.password;
     if (hasCreds) {
       try {
-        const userEsc = String(config.username).replace(/'/g, "''");
-        const passEsc = String(config.password).replace(/'/g, "''");
         const psScript = `
           try {
             $ErrorActionPreference = 'Stop'
-            $u = '${userEsc}'
-            $p = '${passEsc}'
-            $sec = ConvertTo-SecureString $p -AsPlainText -Force
-            $cred = New-Object System.Management.Automation.PSCredential ($u, $sec)
-            Start-Process -FilePath mmc.exe -ArgumentList 'dsa.msc' -Credential $cred
-            'OK'
+            Start-Process -FilePath mmc.exe -ArgumentList 'dsa.msc' -Credential $ACTV_CRED
+            Write-Output 'OK'
           } catch {
-            "ERROR: $($_.Exception.Message)"
+            Write-Output "ERROR: $($_.Exception.Message)"
           }
         `;
-        const out = await executePowerShell(psScript);
+        const credEnv = { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) };
+        const out = await executePowerShell(psScript, { env: credEnv, useCredentialPrelude: true });
         if (out && out.startsWith('ERROR:')) {
           return { success: false, error: out.substring(6).trim() };
         }
@@ -193,6 +188,62 @@ function registerAuthHandlers() {
             ps.on('close', (code) => resolve({ success: code === 0 }));
           } catch (e2) {
             resolve({ success: false, error: String((e2 && e2.message) || 'Failed to launch ADUC') });
+          }
+        });
+        setTimeout(() => { if (!started) resolve({ success: true }); }, 1500);
+      } catch (e) {
+        resolve({ success: false, error: e.message });
+      }
+    });
+  });
+
+  // Launch PowerShell x86 with cached credentials
+  ipcMain.handle('launch-powershell-x86', async (event, config) => {
+    // Check if we have valid credentials
+    const hasCreds = config && config.username && config.password &&
+                     config.username.trim() !== '' && config.password.trim() !== '';
+
+    if (hasCreds) {
+      try {
+        const psScript = `
+          try {
+            $ErrorActionPreference = 'Stop'
+            $psPath = "$env:WINDIR\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe"
+            Start-Process -FilePath $psPath -Credential $ACTV_CRED
+            Write-Output 'OK'
+          } catch {
+            Write-Output "ERROR: $($_.Exception.Message)"
+          }
+        `;
+        const credEnv = {
+          ACTV_USER: String(config.username).trim(),
+          ACTV_PASS: String(config.password).trim()
+        };
+        const out = await executePowerShell(psScript, { env: credEnv, useCredentialPrelude: true });
+        if (out && out.startsWith('ERROR:')) {
+          // If credential launch fails, fall back to current session
+          console.warn('Credential-based PowerShell launch failed, falling back to current session');
+        } else {
+          return { success: true };
+        }
+      } catch (e) {
+        console.warn('PowerShell credential launch error, falling back to current session:', e.message);
+      }
+    }
+
+    // Fallback: current session (always try this if credentials fail or aren't available)
+    return await new Promise((resolve) => {
+      try {
+        const psPath = path.join(process.env.WINDIR || 'C:\\Windows', 'SysWOW64', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+        const p = spawn(psPath);
+        let started = false;
+        p.on('spawn', () => { started = true; resolve({ success: true }); });
+        p.on('error', () => {
+          try {
+            const ps = spawn('powershell', ['-NoProfile', '-Command', `Start-Process "${psPath}"`]);
+            ps.on('close', (code) => resolve({ success: code === 0 }));
+          } catch (e2) {
+            resolve({ success: false, error: String((e2 && e2.message) || 'Failed to launch PowerShell x86') });
           }
         });
         setTimeout(() => { if (!started) resolve({ success: true }); }, 1500);

@@ -52,11 +52,22 @@ function createWindow() {
 function registerAllHandlers() {
   console.log('Registering IPC handlers...');
 
+  console.log('Registering auth handlers...');
   registerAuthHandlers();
+
+  console.log('Registering user handlers...');
   registerUserHandlers();
+
+  console.log('Registering computer handlers...');
   registerComputerHandlers();
+
+  console.log('Registering group handlers...');
   registerGroupHandlers();
+
+  console.log('Registering system handlers...');
   registerSystemHandlers();
+
+  console.log('Registering LDAP handlers...');
   registerLdapHandlers();
 
   console.log('All IPC handlers registered successfully');
