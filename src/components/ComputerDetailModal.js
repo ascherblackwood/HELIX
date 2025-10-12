@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLDAP } from '../contexts/LDAPContext';
+import PrinterInstallationModal from './PrinterInstallationModal';
 import {
   XMarkIcon,
   ComputerDesktopIcon,
@@ -32,10 +33,7 @@ const ComputerDetailModal = ({ computer, isOpen, onClose }) => {
   const [invError, setInvError] = useState('');
   const [invFetchedAt, setInvFetchedAt] = useState('');
   const [showPrinterModal, setShowPrinterModal] = useState(false);
-  const [selectedPrinter, setSelectedPrinter] = useState('');
-  const [printerInstallStatus, setPrinterInstallStatus] = useState('');
-  const [printerSearchTerm, setPrinterSearchTerm] = useState('');
-  
+
   // User Profiles state
   const [showUserProfilesModal, setShowUserProfilesModal] = useState(false);
   const [userProfiles, setUserProfiles] = useState([]);
@@ -298,69 +296,10 @@ const ComputerDetailModal = ({ computer, isOpen, onClose }) => {
     }
   };
 
-  // Available printers from inventory (simulating 300+ printers)
-  const generatePrinters = () => {
-    const printers = [];
-    const brands = ['HP', 'Canon', 'Epson', 'Brother', 'Xerox', 'Ricoh', 'Lexmark', 'Dell'];
-    const models = [
-      'LaserJet Pro 404dn', 'LaserJet Pro M15w', 'Color LaserJet Pro M454dn', 'OfficeJet Pro 9015e',
-      'ImageRunner 2625i', 'ImageRunner ADVANCE C3530i', 'PIXMA TR8620', 'imageCLASS MF445dw',
-      'WorkForce Pro WF-4740', 'EcoTank ET-4760', 'Expression Premium XP-7100', 'WorkForce WF-7710',
-      'HL-L2350DW', 'MFC-L8900CDW', 'HL-L3270CDW', 'DCP-L2550DW',
-      'VersaLink C405', 'WorkCentre 6515', 'Phaser 6510', 'ColorQube 8900',
-      'Aficio MP C3003', 'Pro C5300s', 'SP 330DN', 'MP C2011SP',
-      'MS415dn', 'CX417de', 'MB2236adw', 'CS421dn',
-      '2330dn', 'E515dw', 'H815dw', 'S2830dn'
-    ];
-    const buildings = ['A', 'B', 'C', 'D', 'E', 'F'];
-    const departments = ['IT', 'HR', 'Marketing', 'Finance', 'Engineering', 'Reception', 'Legal', 'Operations', 'Sales', 'Support'];
-    const floors = [1, 2, 3, 4, 5];
-
-    for (let i = 1; i <= 320; i++) {
-      const brand = brands[Math.floor(Math.random() * brands.length)];
-      const model = models[Math.floor(Math.random() * models.length)];
-      const building = buildings[Math.floor(Math.random() * buildings.length)];
-      const floor = floors[Math.floor(Math.random() * floors.length)];
-      const dept = departments[Math.floor(Math.random() * departments.length)];
-      const room = Math.floor(Math.random() * 50) + 100;
-      
-      printers.push({
-        id: `PR-${brand.substring(0,2).toUpperCase()}-${i.toString().padStart(3, '0')}`,
-        name: `${brand} ${model}`,
-        ip: `192.168.${Math.floor(i / 254) + 1}.${(i % 254) + 1}`,
-        location: `Building ${building} - Floor ${floor} - ${dept} (Room ${room})`,
-        department: dept,
-        building: building,
-        floor: floor,
-        brand: brand
-      });
-    }
-
-    return printers.sort((a, b) => a.name.localeCompare(b.name));
-  };
-
-  const allPrinters = generatePrinters();
-  
-  // Filter printers based on search term
-  const filteredPrinters = allPrinters.filter(printer => {
-    if (!printerSearchTerm.trim()) return true;
-    
-    const searchLower = printerSearchTerm.toLowerCase();
-    return (
-      printer.name.toLowerCase().includes(searchLower) ||
-      printer.ip.includes(searchLower) ||
-      printer.location.toLowerCase().includes(searchLower) ||
-      printer.department.toLowerCase().includes(searchLower) ||
-      printer.building.toLowerCase().includes(searchLower) ||
-      printer.brand.toLowerCase().includes(searchLower) ||
-      printer.id.toLowerCase().includes(searchLower)
-    );
-  });
-
   const handleInstallPrinter = () => {
     setShowPrinterModal(true);
   };
-  
+
   // User Profiles Functions
   const handleShowUserProfiles = async () => {
     setShowUserProfilesModal(true);
@@ -493,52 +432,6 @@ const ComputerDetailModal = ({ computer, isOpen, onClose }) => {
       setProfilesError(`Error enabling WinRM: ${e.message}`);
       setLoadingProfiles(false);
       setActionStatus('');
-    }
-  };
-
-  const handlePrinterInstallConfirm = async () => {
-    if (!selectedPrinter) {
-      alert('Please select a printer to install.');
-      return;
-    }
-
-    const printer = allPrinters.find(p => p.id === selectedPrinter);
-    setPrinterInstallStatus(`Installing ${printer.name} on ${computer.computerName}...`);
-    
-    try {
-      // Check WinRM connectivity first
-      const winrmTest = await window.electronAPI?.testWinRM?.(computer.computerName);
-      
-      if (!winrmTest?.success) {
-        // Try to enable WinRM remotely
-        setPrinterInstallStatus('WinRM not enabled. Attempting to enable remotely...');
-        const enableResult = await window.electronAPI?.enableWinRM?.(computer.computerName);
-        
-        if (!enableResult?.success) {
-          throw new Error('Failed to enable WinRM. Manual intervention may be required.');
-        }
-      }
-      
-      // Install the printer remotely
-      const installResult = await window.electronAPI?.installPrinterRemote?.(
-        computer.computerName,
-        printer.ip,
-        printer.name
-      );
-      
-      if (installResult?.success) {
-        setPrinterInstallStatus(`Successfully installed ${printer.name}`);
-        setTimeout(() => {
-          setShowPrinterModal(false);
-          setSelectedPrinter('');
-          setPrinterInstallStatus('');
-        }, 2000);
-      } else {
-        throw new Error(installResult?.error || 'Installation failed');
-      }
-    } catch (error) {
-      console.error('Printer installation failed:', error);
-      setPrinterInstallStatus(`Installation failed: ${error.message}`);
     }
   };
 
@@ -914,140 +807,11 @@ const ComputerDetailModal = ({ computer, isOpen, onClose }) => {
       </div>
 
       {/* Printer Installation Modal */}
-      {showPrinterModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-60">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div className="flex items-center space-x-3">
-                <PrinterIcon className="w-6 h-6 text-purple-600" />
-                <h3 className="text-xl font-bold text-gray-900">Install Printer to {computer.computerName}</h3>
-              </div>
-              <button
-                onClick={() => {
-                  setShowPrinterModal(false);
-                  setSelectedPrinter('');
-                  setPrinterInstallStatus('');
-                  setPrinterSearchTerm('');
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <XMarkIcon className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Select Printer to Install:
-                </label>
-                
-                {/* Search Bar */}
-                <div className="relative mb-4">
-                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search printers by name, location, department, IP address..."
-                    value={printerSearchTerm}
-                    onChange={(e) => setPrinterSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-                
-                {/* Results Count */}
-                <div className="text-sm text-gray-600 mb-3">
-                  {filteredPrinters.length === allPrinters.length ? 
-                    `Showing all ${allPrinters.length} printers` : 
-                    `Found ${filteredPrinters.length} of ${allPrinters.length} printers`
-                  }
-                </div>
-                
-                {/* Printer List - Scrollable */}
-                <div className="space-y-3 max-h-80 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                  {filteredPrinters.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <PrinterIcon className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                      <p>No printers found matching your search</p>
-                      <p className="text-sm">Try adjusting your search terms</p>
-                    </div>
-                  ) : (
-                    filteredPrinters.map((printer) => (
-                    <div
-                      key={printer.id}
-                      className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                        selectedPrinter === printer.id
-                          ? 'border-purple-500 bg-purple-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                      onClick={() => setSelectedPrinter(printer.id)}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <input
-                          type="radio"
-                          name="printer"
-                          value={printer.id}
-                          checked={selectedPrinter === printer.id}
-                          onChange={() => setSelectedPrinter(printer.id)}
-                          className="text-purple-600"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <PrinterIcon className="w-5 h-5 text-gray-400" />
-                            <span className="font-medium text-gray-900">{printer.name}</span>
-                          </div>
-                          <div className="text-sm text-gray-600 mt-1">
-                            <span className="font-mono">{printer.ip}</span> • {printer.location}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )))}
-                </div>
-              </div>
-
-              {printerInstallStatus && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <ArrowPathIcon className="w-4 h-4 text-blue-600 animate-spin" />
-                    <span className="text-sm text-blue-700">{printerInstallStatus}</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                <h4 className="text-sm font-medium text-yellow-800 mb-2">Installation Process:</h4>
-                <ul className="text-sm text-yellow-700 space-y-1">
-                  <li>• Checks WinRM connectivity to target computer</li>
-                  <li>• Enables WinRM remotely if needed</li>
-                  <li>• Installs printer drivers and configures network printer</li>
-                  <li>• Sets up printer queue on the target computer</li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
-              <button
-                onClick={() => {
-                  setShowPrinterModal(false);
-                  setSelectedPrinter('');
-                  setPrinterInstallStatus('');
-                  setPrinterSearchTerm('');
-                }}
-                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                disabled={printerInstallStatus.includes('Installing')}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePrinterInstallConfirm}
-                disabled={!selectedPrinter || printerInstallStatus.includes('Installing')}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 transition-colors"
-              >
-                Install Printer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PrinterInstallationModal
+        isOpen={showPrinterModal}
+        onClose={() => setShowPrinterModal(false)}
+        computerName={computer.computerName}
+      />
       
       {/* User Profiles Modal */}
       {showUserProfilesModal && (

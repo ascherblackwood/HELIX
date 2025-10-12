@@ -277,66 +277,6 @@ function registerComputerHandlers() {
     }
   });
 
-  // Install Printer remotely using PowerShell and PSExec
-  ipcMain.handle('install-printer-remote', async (event, computerName, printerIP, printerName) => {
-    return new Promise((resolve) => {
-      // PowerShell script to install network printer
-      const psScript = `
-        try {
-          # Add printer port
-          Add-PrinterPort -Name "IP_${printerIP}" -PrinterHostAddress "${printerIP}" -ErrorAction Stop
-
-          # Add printer (using generic driver)
-          Add-Printer -Name "${printerName}" -DriverName "Generic / Text Only" -PortName "IP_${printerIP}" -ErrorAction Stop
-
-          Write-Output "SUCCESS: Printer ${printerName} installed successfully"
-        } catch {
-          Write-Output "ERROR: $($_.Exception.Message)"
-        }
-      `;
-
-      // Use PSExec to run PowerShell script remotely
-      const process = spawn('psexec', [
-        `\\\\${computerName}`,
-        '-s',
-        'powershell',
-        '-Command',
-        psScript
-      ]);
-
-      let output = '';
-      let errorOutput = '';
-
-      process.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-
-      process.stderr.on('data', (data) => {
-        errorOutput += data.toString();
-      });
-
-      process.on('close', (code) => {
-        if (output.includes('SUCCESS')) {
-          resolve({
-            success: true,
-            message: `Printer ${printerName} installed successfully on ${computerName}`
-          });
-        } else {
-          resolve({
-            success: false,
-            error: `Installation failed: ${errorOutput || output}`
-          });
-        }
-      });
-
-      // Timeout after 60 seconds
-      setTimeout(() => {
-        process.kill();
-        resolve({ success: false, error: 'Printer installation timeout' });
-      }, 60000);
-    });
-  });
-
   // Check if PSExec is available
   ipcMain.handle('check-psexec', async () => {
     // Return that PSExec is not required - we use PowerShell alternatives
@@ -344,81 +284,6 @@ function registerComputerHandlers() {
       available: false,
       message: 'PSExec not required - Using PowerShell alternatives for remote operations'
     };
-  });
-
-  // Test Printer Server Connection
-  ipcMain.handle('test-printer-server', async (event, serverPath) => {
-    return new Promise((resolve) => {
-      // Use net view to test printer server connection
-      const process = spawn('net', ['view', serverPath]);
-
-      let output = '';
-      let errorOutput = '';
-
-      process.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-
-      process.stderr.on('data', (data) => {
-        errorOutput += data.toString();
-      });
-
-      process.on('close', (code) => {
-        if (code === 0) {
-          // Count printers in the output
-          const printerCount = (output.match(/Print/gi) || []).length;
-          resolve({
-            success: true,
-            message: `Connected to ${serverPath}`,
-            printers: printerCount
-          });
-        } else {
-          resolve({
-            success: false,
-            error: `Cannot connect to ${serverPath}: ${errorOutput || 'Server not accessible'}`
-          });
-        }
-      });
-
-      process.on('error', () => {
-        resolve({
-          success: false,
-          error: `Failed to test connection to ${serverPath}`
-        });
-      });
-
-      // Timeout after 10 seconds
-      setTimeout(() => {
-        process.kill();
-        resolve({ success: false, error: 'Connection test timeout' });
-      }, 10000);
-    });
-  });
-
-  // Open Printer Server in Windows Explorer
-  ipcMain.handle('open-printer-server', async (event, serverPath) => {
-    return new Promise((resolve) => {
-      // Use explorer.exe to open the UNC path
-      const process = spawn('explorer', [serverPath]);
-
-      process.on('close', (code) => {
-        if (code === 0) {
-          resolve({ success: true, message: `Opened ${serverPath} in Explorer` });
-        } else {
-          resolve({ success: false, error: `Failed to open ${serverPath}` });
-        }
-      });
-
-      process.on('error', () => {
-        resolve({ success: false, error: `Failed to open ${serverPath}` });
-      });
-
-      // Timeout after 5 seconds
-      setTimeout(() => {
-        process.kill();
-        resolve({ success: false, error: 'Open server timeout' });
-      }, 5000);
-    });
   });
 
   // Open Computer C$ Administrative Share
@@ -594,29 +459,34 @@ function registerComputerHandlers() {
   });
 
   // Get Printers from Print Server
-  ipcMain.handle('get-printers', async (event, serverName, searchQuery) => {
+  ipcMain.handle('get-printers-from-server', async (event, serverName) => {
     if (!serverName) {
-      return { success: false, error: 'Server name is required' };
+      return { success: false, error: 'Print server name is required' };
     }
 
     const psScript = `
       try {
         $ErrorActionPreference = 'Stop'
-        $serverName = '${serverName.replace(/\\/g, '\\\\')}'
-        $searchQuery = '${(searchQuery || '').replace(/'/g, "''")}'
+        $serverName = '${serverName}'
 
-        Write-Host "Fetching printers from $serverName..."
-
-        $printers = Get-Printer -ComputerName $serverName -ErrorAction Stop | Select-Object -ExpandProperty Name
-
-        if ($searchQuery) {
-          $printers = $printers | Where-Object { $_ -like "*$searchQuery*" }
-        }
+        # Try to get printers from the print server
+        $printers = Get-Printer -ComputerName $serverName -ErrorAction Stop |
+          Where-Object { $_.Type -eq 'Connection' -or $_.Shared -eq $true } |
+          Select-Object Name, DriverName, PortName, Shared
 
         if ($printers) {
-          $printers | ConvertTo-Json -Compress
+          $printerList = $printers | ForEach-Object {
+            @{
+              name = $_.Name
+              driver = $_.DriverName
+              port = $_.PortName
+              shared = $_.Shared
+            }
+          }
+          $json = $printerList | ConvertTo-Json -Compress
+          Write-Output "SUCCESS:$json"
         } else {
-          Write-Output '[]'
+          Write-Output "SUCCESS:[]"
         }
       } catch {
         Write-Output "ERROR: $($_.Exception.Message)"
@@ -625,22 +495,36 @@ function registerComputerHandlers() {
 
     try {
       const output = await executePowerShell(psScript);
-      if (output.startsWith('ERROR:')) {
-        return { success: false, error: output.substring(6).trim() };
-      }
 
-      const printers = JSON.parse(output || '[]');
-      return {
-        success: true,
-        printers: Array.isArray(printers) ? printers : [printers]
-      };
-    } catch (e) {
-      return { success: false, error: e.message };
+      if (output.startsWith('SUCCESS:')) {
+        const jsonData = output.substring(8);
+        try {
+          const printers = jsonData.trim() === '[]' ? [] : JSON.parse(jsonData);
+          return {
+            success: true,
+            printers: Array.isArray(printers) ? printers : [printers]
+          };
+        } catch (parseError) {
+          return { success: true, printers: [] };
+        }
+      } else if (output.startsWith('ERROR:')) {
+        return {
+          success: false,
+          error: output.substring(6).trim() || 'Failed to retrieve printers from server'
+        };
+      } else {
+        return { success: false, error: 'Unexpected response from server' };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
     }
   });
 
-  // Install Printer
-  ipcMain.handle('install-printer', async (event, printerPath) => {
+  // Install Printer on Remote Computer
+  ipcMain.handle('install-printer', async (event, computerName, printerPath) => {
+    if (!computerName) {
+      return { success: false, error: 'Computer name is required' };
+    }
     if (!printerPath) {
       return { success: false, error: 'Printer path is required' };
     }
@@ -648,18 +532,35 @@ function registerComputerHandlers() {
     const psScript = `
       try {
         $ErrorActionPreference = 'Stop'
-        $printerPath = '${printerPath.replace(/\\/g, '\\\\')}'
+        $computerName = '${computerName}'
+        $printerPath = '${printerPath}'
 
-        Write-Host "Installing printer: $printerPath"
+        # Install printer on remote computer
+        Invoke-Command -ComputerName $computerName -ScriptBlock {
+          param($printerPath)
 
-        # Use rundll32 to install the printer
-        $process = Start-Process -FilePath "rundll32" -ArgumentList "printui.dll,PrintUIEntry /in /n\`"$printerPath\`"" -Wait -PassThru -NoNewWindow
+          try {
+            # Use rundll32 to add the network printer (most reliable method)
+            $arguments = "printui.dll,PrintUIEntry /in /n \`"$printerPath\`" /q"
+            $process = Start-Process -FilePath "rundll32.exe" -ArgumentList $arguments -Wait -PassThru -NoNewWindow
 
-        if ($process.ExitCode -eq 0) {
-          Write-Output 'SUCCESS'
-        } else {
-          Write-Output "ERROR: Installation failed with exit code $($process.ExitCode)"
-        }
+            if ($process.ExitCode -eq 0) {
+              Write-Output "SUCCESS: Printer installed successfully"
+            } else {
+              # Try WMI method as fallback
+              try {
+                $network = New-Object -ComObject WScript.Network
+                $network.AddWindowsPrinterConnection($printerPath)
+                Write-Output "SUCCESS: Printer installed successfully"
+              } catch {
+                Write-Output "ERROR: Failed to install printer: $($_.Exception.Message)"
+              }
+            }
+          } catch {
+            Write-Output "ERROR: $($_.Exception.Message)"
+          }
+        } -ArgumentList $printerPath -ErrorAction Stop
+
       } catch {
         Write-Output "ERROR: $($_.Exception.Message)"
       }
@@ -667,14 +568,27 @@ function registerComputerHandlers() {
 
     try {
       const output = await executePowerShell(psScript);
-      if (output.startsWith('ERROR:')) {
-        return { success: false, error: output.substring(6).trim() };
+
+      if (output.includes('SUCCESS:')) {
+        return {
+          success: true,
+          message: 'Printer installed successfully'
+        };
+      } else if (output.includes('ERROR:')) {
+        const errorMsg = output.substring(output.indexOf('ERROR:') + 6).trim();
+        return {
+          success: false,
+          error: errorMsg || 'Failed to install printer'
+        };
+      } else {
+        return { success: false, error: 'Unexpected response from installation' };
       }
-      return { success: true };
-    } catch (e) {
-      return { success: false, error: e.message };
+    } catch (error) {
+      return { success: false, error: error.message };
     }
   });
+
+  console.log('=== COMPUTER HANDLERS REGISTRATION COMPLETE ===');
 }
 
 module.exports = { registerComputerHandlers };

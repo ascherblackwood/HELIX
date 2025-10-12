@@ -54,6 +54,27 @@ const SettingsPage = () => {
     }
   }, [connectionConfig]);
 
+  // Load print servers from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('actv_print_servers');
+      if (saved) {
+        setPrinterServers(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Failed to load print servers from localStorage:', error);
+    }
+  }, []);
+
+  // Save print servers to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('actv_print_servers', JSON.stringify(printerServers));
+    } catch (error) {
+      console.error('Failed to save print servers to localStorage:', error);
+    }
+  }, [printerServers]);
+
   useEffect(() => {
     const getSystemInfo = async () => {
       try {

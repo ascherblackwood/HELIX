@@ -9,7 +9,7 @@ import {
   ServerIcon
 } from '@heroicons/react/24/outline';
 import { useLDAP } from '../contexts/LDAPContext';
-import PrinterManagementModal from '../components/PrinterManagementModal';
+import PrinterInstallationModal from '../components/PrinterInstallationModal';
 
 const AdminPage = () => {
   const { isConnected, authInfo, loading, getADCounts, getOUCounts, connectionConfig } = useLDAP();
@@ -105,6 +105,8 @@ const AdminPage = () => {
   const [backupInProgress, setBackupInProgress] = useState(false);
   const [backupResult, setBackupResult] = useState(null);
   const [showPrinterModal, setShowPrinterModal] = useState(false);
+  const [showComputerPrompt, setShowComputerPrompt] = useState(false);
+  const [targetComputer, setTargetComputer] = useState('');
 
   const handleBackup = async () => {
     if (backupInProgress) return;
@@ -400,12 +402,6 @@ const AdminPage = () => {
               PowerShell
             </button>
             <button
-              onClick={() => setShowPrinterModal(true)}
-              className="px-3 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-            >
-              Printer Installation
-            </button>
-            <button
               onClick={async () => {
                 try {
                   const res = await window.electronAPI.launchGPMC(connectionConfig);
@@ -420,6 +416,12 @@ const AdminPage = () => {
             >
               Group Policy Manager
             </button>
+            <button
+              onClick={() => setShowComputerPrompt(true)}
+              className="px-3 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              Printer Installation
+            </button>
             <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">DHCP Manager</button>
             <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">Event Viewer</button>
             <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">PowerShell</button>
@@ -428,11 +430,63 @@ const AdminPage = () => {
         </div>
       </div>
 
-      {/* Printer Management Modal */}
-      <PrinterManagementModal
+      {/* Computer Name Prompt Modal */}
+      {showComputerPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Install Printer to Computer</h3>
+            <p className="text-sm text-gray-600 mb-4">Enter the name of the computer where you want to install a printer:</p>
+            <input
+              type="text"
+              value={targetComputer}
+              onChange={(e) => setTargetComputer(e.target.value)}
+              placeholder="Computer name (e.g., PC-001)"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && targetComputer.trim()) {
+                  setShowComputerPrompt(false);
+                  setShowPrinterModal(true);
+                }
+              }}
+              autoFocus
+            />
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowComputerPrompt(false);
+                  setTargetComputer('');
+                }}
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (targetComputer.trim()) {
+                    setShowComputerPrompt(false);
+                    setShowPrinterModal(true);
+                  }
+                }}
+                disabled={!targetComputer.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Printer Installation Modal */}
+      <PrinterInstallationModal
         isOpen={showPrinterModal}
-        onClose={() => setShowPrinterModal(false)}
+        onClose={() => {
+          setShowPrinterModal(false);
+          setTargetComputer('');
+        }}
+        computerName={targetComputer}
       />
+
     </div>
   );
 };

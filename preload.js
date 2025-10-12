@@ -33,7 +33,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Remote Management Operations
   testWinRM: (computerName) => ipcRenderer.invoke('test-winrm', computerName),
   enableWinRM: (computerName) => ipcRenderer.invoke('enable-winrm', computerName),
-  installPrinterRemote: (computerName, printerIP, printerName) => ipcRenderer.invoke('install-printer-remote', computerName, printerIP, printerName),
   checkPsExec: () => ipcRenderer.invoke('check-psexec'),
   // Inventory
   getComputerInventory: (computerName) => ipcRenderer.invoke('get-computer-inventory', computerName),
@@ -43,13 +42,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteUserProfiles: (computerName, selectedProfiles) => ipcRenderer.invoke('delete-user-profiles', computerName, selectedProfiles),
   rebootComputer: (computerName) => ipcRenderer.invoke('reboot-computer', computerName),
   getDiskSpace: (computerName) => ipcRenderer.invoke('get-disk-space', computerName),
-  
-  // Printer Server Management
-  testPrinterServer: (serverPath) => ipcRenderer.invoke('test-printer-server', serverPath),
-  openPrinterServer: (serverPath) => ipcRenderer.invoke('open-printer-server', serverPath),
-  getPrinters: (serverName, searchQuery) => ipcRenderer.invoke('get-printers', serverName, searchQuery),
-  installPrinter: (printerPath) => ipcRenderer.invoke('install-printer', printerPath),
-  
+
+  // Printer Management
+  getPrintersFromServer: (serverName) => ipcRenderer.invoke('get-printers-from-server', serverName),
+  installPrinter: (computerName, printerPath) => ipcRenderer.invoke('install-printer', computerName, printerPath),
+
   // File System Access
   openComputerCDrive: (computerName) => ipcRenderer.invoke('open-computer-c-drive', computerName),
 

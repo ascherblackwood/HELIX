@@ -68,8 +68,7 @@
       "node_modules/**/*",
       "src/assets/**/*",
       "handlers/**/*",
-      "utils/**/*",
-      "PrinterManagement.ps1"
+      "utils/**/*"
     ],
     "win": {
       "target": [
