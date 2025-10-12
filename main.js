@@ -2,12 +2,12 @@ const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
 // Import all handler modules
-const { registerAuthHandlers } = require(path.join(__dirname, 'handlers', 'auth'));
-const { registerUserHandlers } = require(path.join(__dirname, 'handlers', 'users'));
-const { registerComputerHandlers } = require(path.join(__dirname, 'handlers', 'computers'));
-const { registerGroupHandlers } = require(path.join(__dirname, 'handlers', 'groups'));
-const { registerSystemHandlers } = require(path.join(__dirname, 'handlers', 'system'));
-const { registerLdapHandlers } = require(path.join(__dirname, 'handlers', 'ldap'));
+const { registerAuthHandlers } = require('./handlers/auth');
+const { registerUserHandlers } = require('./handlers/users');
+const { registerComputerHandlers } = require('./handlers/computers');
+const { registerGroupHandlers } = require('./handlers/groups');
+const { registerSystemHandlers } = require('./handlers/system');
+const { registerLdapHandlers } = require('./handlers/ldap');
 
 // More reliable isDev detection for packaged apps
 const isDev = process.defaultApp || /[\\/]electron-prebuilt[\\/]/.test(process.execPath) || /[\\/]electron[\\/]/.test(process.execPath);
@@ -74,8 +74,8 @@ function registerAllHandlers() {
 }
 
 app.whenReady().then(() => {
-  createWindow();
   registerAllHandlers();
+  createWindow();
 });
 
 app.on('window-all-closed', () => {

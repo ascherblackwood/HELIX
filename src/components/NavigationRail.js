@@ -51,7 +51,7 @@ const NavigationRail = ({ currentPage, onPageChange }) => {
           </div>
           <div>
             <h1 className="text-xl font-bold themed-text-primary">Act.V</h1>
-            <p className="text-sm themed-text-muted">v3.1.12 AD Console</p>
+            <p className="text-sm themed-text-muted">v3.4.2 AD Console</p>
           </div>
         </div>
       </div>
@@ -88,8 +88,8 @@ const NavigationRail = ({ currentPage, onPageChange }) => {
       {/* Footer */}
       <div className="p-4 border-t themed-border">
         <div className="text-xs themed-text-muted text-center">
-          <p>Version 3.3.1</p>
-          <p>Build 2025.09.001</p>
+          <p>Version 3.4.2</p>
+          <p>Build 2025.10.001</p>
         </div>
       </div>
     </div>

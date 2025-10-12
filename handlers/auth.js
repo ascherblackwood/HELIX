@@ -1,7 +1,19 @@
-const { ipcMain } = require('electron');
+const { ipcMain, app } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const { executePowerShell, buildAuthParam, ensureKerberosIfRequired } = require(path.join(__dirname, '..', 'utils', 'powershell'));
+
+// In-memory credential cache (cleared on app exit)
+let credentialCache = {
+  username: null,
+  password: null,
+  timestamp: null
+};
+
+// Clear credentials on app quit
+app.on('will-quit', () => {
+  credentialCache = { username: null, password: null, timestamp: null };
+});
 
 /**
  * Register authentication-related IPC handlers
@@ -137,6 +149,13 @@ function registerAuthHandlers() {
       `;
       const result = await executePowerShell(testCommand);
       if (result.includes('OK')) {
+        // Cache credentials in memory for this session
+        if (config.username && config.password) {
+          credentialCache.username = config.username;
+          credentialCache.password = config.password;
+          credentialCache.timestamp = Date.now();
+          console.log('Credentials cached in memory for session');
+        }
         return {
           success: true,
           message: 'Connected using Kerberos/Negotiate',
@@ -153,7 +172,95 @@ function registerAuthHandlers() {
 
   // Launch AD Users and Computers (dsa.msc)
   ipcMain.handle('launch-aduc', async (event, config) => {
-    // If AD credentials were provided in connection settings, launch under those creds
+    // If using Kerberos, check if we have cached credentials
+    if (config && config.username && (config.useKerberos || config.kerberosOnly)) {
+      // Check if we have cached credentials
+      if (credentialCache.username && credentialCache.password) {
+        console.log('Using cached credentials for ADUC launch');
+        try {
+          // Convert username to proper format if needed
+          let username = credentialCache.username;
+          const domain = config.server ? config.server.split('.')[0].toUpperCase() : '';
+
+          // If username is in UPN format (user@domain.com), convert to DOMAIN\user
+          if (username.includes('@') && !username.includes('\\')) {
+            const userPart = username.split('@')[0];
+            username = domain ? `${domain}\\${userPart}` : username;
+          } else if (!username.includes('\\') && !username.includes('@') && domain) {
+            // If it's just a plain username, add domain prefix
+            username = `${domain}\\${username}`;
+          }
+
+          // Create a temporary script that will run ADUC with credentials
+          const psScript = `
+            try {
+              $ErrorActionPreference = 'Stop'
+
+              # Create a temporary PS script that launches ADUC
+              $tempScript = [System.IO.Path]::GetTempFileName() + '.ps1'
+              @'
+              Start-Process -FilePath mmc.exe -ArgumentList 'dsa.msc' -Verb RunAs
+'@ | Out-File -FilePath $tempScript -Encoding ASCII
+
+              # Run the temp script with provided credentials
+              Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File \`"$tempScript\`"" -Credential $ACTV_CRED -WindowStyle Hidden
+
+              # Clean up temp file after a delay
+              Start-Sleep -Milliseconds 500
+              Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+
+              Write-Output 'OK'
+            } catch {
+              Write-Output "ERROR: $($_.Exception.Message)"
+            }
+          `;
+          const credEnv = {
+            ACTV_USER: String(username),
+            ACTV_PASS: String(credentialCache.password)
+          };
+          const out = await executePowerShell(psScript, { env: credEnv, useCredentialPrelude: true });
+          if (out && out.startsWith('ERROR:')) {
+            return { success: false, error: out.substring(6).trim() };
+          }
+          return { success: true };
+        } catch (e) {
+          return { success: false, error: e.message };
+        }
+      } else {
+        // No cached credentials, prompt user
+        try {
+          const domain = config.server ? config.server.split('.')[0].toUpperCase() : '';
+          const username = config.username.includes('@') || config.username.includes('\\')
+            ? config.username
+            : (domain ? `${domain}\\${config.username}` : config.username);
+
+          const psScript = `
+            try {
+              $ErrorActionPreference = 'Stop'
+              $psi = New-Object System.Diagnostics.ProcessStartInfo
+              $psi.FileName = "cmd.exe"
+              $psi.Arguments = "/k runas /netonly /user:${username.replace(/\\/g, '\\\\')} \`"mmc.exe dsa.msc\`" && exit"
+              $psi.UseShellExecute = $true
+              $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Normal
+              $process = [System.Diagnostics.Process]::Start($psi)
+              Write-Output 'OK'
+            } catch {
+              Write-Output "ERROR: $($_.Exception.Message)"
+            }
+          `;
+
+          const out = await executePowerShell(psScript);
+          if (out && out.startsWith('ERROR:')) {
+            return { success: false, error: out.substring(6).trim() };
+          }
+          return { success: true, message: 'ADUC launching. Enter your password in the console window.' };
+        } catch (e) {
+          return { success: false, error: e.message };
+        }
+      }
+    }
+
+    // If AD credentials were provided (non-Kerberos), launch with stored credentials
     const hasCreds = config && config.username && config.password;
     if (hasCreds) {
       try {
@@ -176,7 +283,8 @@ function registerAuthHandlers() {
         return { success: false, error: e.message };
       }
     }
-    // Fallback: current session
+
+    // Fallback: current session (read-only if not admin)
     return await new Promise((resolve) => {
       try {
         const p = spawn('mmc', ['dsa.msc']);
@@ -188,6 +296,187 @@ function registerAuthHandlers() {
             ps.on('close', (code) => resolve({ success: code === 0 }));
           } catch (e2) {
             resolve({ success: false, error: String((e2 && e2.message) || 'Failed to launch ADUC') });
+          }
+        });
+        setTimeout(() => { if (!started) resolve({ success: true }); }, 1500);
+      } catch (e) {
+        resolve({ success: false, error: e.message });
+      }
+    });
+  });
+
+  // Launch Group Policy Management Console (gpmc.msc)
+  ipcMain.handle('launch-gpmc', async (event, config) => {
+    // First check if GPMC is installed and get the correct path
+    let gpmcPath = 'gpmc.msc';
+    try {
+      const checkScript = `
+        # Check multiple possible locations for GPMC
+        $paths = @(
+          "$env:SystemRoot\\System32\\gpmc.msc",
+          "$env:ProgramFiles\\Windows Administrative Tools\\gpmc.msc",
+          "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Administrative Tools\\Group Policy Management.lnk"
+        )
+
+        foreach ($path in $paths) {
+          if (Test-Path $path) {
+            Write-Output "FOUND:$path"
+            exit
+          }
+        }
+
+        # Try to find it using Get-Command
+        try {
+          $cmd = Get-Command gpmc.msc -ErrorAction SilentlyContinue
+          if ($cmd) {
+            Write-Output "FOUND:gpmc.msc"
+            exit
+          }
+        } catch {}
+
+        Write-Output "NOT_FOUND"
+      `;
+      const checkResult = await executePowerShell(checkScript);
+      if (checkResult.includes('NOT_FOUND')) {
+        return {
+          success: false,
+          error: 'Group Policy Management Console (GPMC) is not installed. Install RSAT tools:\n\nWindows 10/11:\n1. Settings → Apps → Optional Features\n2. Add "RSAT: Group Policy Management Tools"\n\nOr via PowerShell:\nGet-WindowsCapability -Name RSAT.GroupPolicy* -Online | Add-WindowsCapability -Online'
+        };
+      } else if (checkResult.includes('FOUND:')) {
+        gpmcPath = checkResult.split('FOUND:')[1].trim();
+        console.log('GPMC found at:', gpmcPath);
+      }
+    } catch (e) {
+      console.warn('Could not verify GPMC installation:', e);
+    }
+
+    // If using Kerberos, check if we have cached credentials
+    if (config && config.username && (config.useKerberos || config.kerberosOnly)) {
+      // Check if we have cached credentials
+      if (credentialCache.username && credentialCache.password) {
+        console.log('Using cached credentials for GPMC launch');
+        try {
+          // Convert username to proper format if needed
+          let username = credentialCache.username;
+          const domain = config.server ? config.server.split('.')[0].toUpperCase() : '';
+
+          // If username is in UPN format (user@domain.com), convert to DOMAIN\user
+          if (username.includes('@') && !username.includes('\\')) {
+            const userPart = username.split('@')[0];
+            username = domain ? `${domain}\\${userPart}` : username;
+          } else if (!username.includes('\\') && !username.includes('@') && domain) {
+            // If it's just a plain username, add domain prefix
+            username = `${domain}\\${username}`;
+          }
+
+          // Create a temporary script that will run GPMC with credentials
+          const gpmcArg = gpmcPath.replace(/'/g, "''");  // Escape single quotes for PowerShell
+          const psScript = `
+            try {
+              $ErrorActionPreference = 'Stop'
+
+              # Create a temporary PS script that launches GPMC
+              $tempScript = [System.IO.Path]::GetTempFileName() + '.ps1'
+              @'
+              Start-Process -FilePath mmc.exe -ArgumentList '${gpmcArg}' -Verb RunAs
+'@ | Out-File -FilePath $tempScript -Encoding ASCII
+
+              # Run the temp script with provided credentials
+              Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File \`"$tempScript\`"" -Credential $ACTV_CRED -WindowStyle Hidden
+
+              # Clean up temp file after a delay
+              Start-Sleep -Milliseconds 500
+              Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+
+              Write-Output 'OK'
+            } catch {
+              Write-Output "ERROR: $($_.Exception.Message)"
+            }
+          `;
+          const credEnv = {
+            ACTV_USER: String(username),
+            ACTV_PASS: String(credentialCache.password)
+          };
+          const out = await executePowerShell(psScript, { env: credEnv, useCredentialPrelude: true });
+          if (out && out.startsWith('ERROR:')) {
+            return { success: false, error: out.substring(6).trim() };
+          }
+          return { success: true };
+        } catch (e) {
+          return { success: false, error: e.message };
+        }
+      } else {
+        // No cached credentials, prompt user
+        try {
+          const domain = config.server ? config.server.split('.')[0].toUpperCase() : '';
+          const username = config.username.includes('@') || config.username.includes('\\')
+            ? config.username
+            : (domain ? `${domain}\\${config.username}` : config.username);
+
+          const gpmcArg2 = gpmcPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          const psScript = `
+            try {
+              $ErrorActionPreference = 'Stop'
+              $psi = New-Object System.Diagnostics.ProcessStartInfo
+              $psi.FileName = "cmd.exe"
+              $psi.Arguments = "/k runas /netonly /user:${username.replace(/\\/g, '\\\\')} \`"mmc.exe \`\`"${gpmcArg2}\`\`"\`" && exit"
+              $psi.UseShellExecute = $true
+              $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Normal
+              $process = [System.Diagnostics.Process]::Start($psi)
+              Write-Output 'OK'
+            } catch {
+              Write-Output "ERROR: $($_.Exception.Message)"
+            }
+          `;
+
+          const out = await executePowerShell(psScript);
+          if (out && out.startsWith('ERROR:')) {
+            return { success: false, error: out.substring(6).trim() };
+          }
+          return { success: true, message: 'GPMC launching. Enter your password in the console window.' };
+        } catch (e) {
+          return { success: false, error: e.message };
+        }
+      }
+    }
+
+    // If AD credentials were provided (non-Kerberos), launch with stored credentials
+    const hasCreds = config && config.username && config.password;
+    if (hasCreds) {
+      try {
+        const gpmcArg3 = gpmcPath.replace(/'/g, "''");
+        const psScript = `
+          try {
+            $ErrorActionPreference = 'Stop'
+            Start-Process -FilePath mmc.exe -ArgumentList '${gpmcArg3}' -Credential $ACTV_CRED
+            Write-Output 'OK'
+          } catch {
+            Write-Output "ERROR: $($_.Exception.Message)"
+          }
+        `;
+        const credEnv = { ACTV_USER: String(config.username), ACTV_PASS: String(config.password) };
+        const out = await executePowerShell(psScript, { env: credEnv, useCredentialPrelude: true });
+        if (out && out.startsWith('ERROR:')) {
+          return { success: false, error: out.substring(6).trim() };
+        }
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    }
+
+    // Fallback: current session (read-only if not admin)
+    return await new Promise((resolve) => {
+      try {
+        const p = spawn('mmc', [gpmcPath]);
+        let started = false;
+        p.on('spawn', () => { started = true; resolve({ success: true }); });
+        p.on('error', () => {
+          try {
+            const ps = spawn('powershell', ['-NoProfile', '-Command', `Start-Process mmc "${gpmcPath}"`]);
+            ps.on('close', (code) => resolve({ success: code === 0 }));
+          } catch (e2) {
+            resolve({ success: false, error: String((e2 && e2.message) || 'Failed to launch GPMC') });
           }
         });
         setTimeout(() => { if (!started) resolve({ success: true }); }, 1500);

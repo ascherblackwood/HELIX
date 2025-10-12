@@ -33,7 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Remote Management Operations
   testWinRM: (computerName) => ipcRenderer.invoke('test-winrm', computerName),
   enableWinRM: (computerName) => ipcRenderer.invoke('enable-winrm', computerName),
-  installPrinter: (computerName, printerIP, printerName) => ipcRenderer.invoke('install-printer', computerName, printerIP, printerName),
+  installPrinterRemote: (computerName, printerIP, printerName) => ipcRenderer.invoke('install-printer-remote', computerName, printerIP, printerName),
   checkPsExec: () => ipcRenderer.invoke('check-psexec'),
   // Inventory
   getComputerInventory: (computerName) => ipcRenderer.invoke('get-computer-inventory', computerName),
@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Admin Utilities
   launchADUC: (config) => ipcRenderer.invoke('launch-aduc', config),
+  launchGPMC: (config) => ipcRenderer.invoke('launch-gpmc', config),
   launchPowerShellx86: (config) => ipcRenderer.invoke('launch-powershell-x86', config),
 
   // Remote session utilities

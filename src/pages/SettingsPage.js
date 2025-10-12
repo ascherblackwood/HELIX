@@ -118,7 +118,7 @@ const SettingsPage = () => {
           useSSL: true,
           port: 636 // LDAPS enforced
         },
-        version: '3.3.1'
+        version: '3.4.2'
       };
 
       const settingsJson = JSON.stringify(settingsData, null, 2);

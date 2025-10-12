@@ -405,7 +405,21 @@ const AdminPage = () => {
             >
               Printer Installation
             </button>
-            <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">DNS Manager</button>
+            <button
+              onClick={async () => {
+                try {
+                  const res = await window.electronAPI.launchGPMC(connectionConfig);
+                  if (!res?.success) {
+                    alert(res?.error || 'Failed to launch Group Policy Manager');
+                  }
+                } catch (e) {
+                  alert('Failed to launch Group Policy Manager');
+                }
+              }}
+              className="px-3 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              Group Policy Manager
+            </button>
             <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">DHCP Manager</button>
             <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">Event Viewer</button>
             <button className="px-3 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors">PowerShell</button>

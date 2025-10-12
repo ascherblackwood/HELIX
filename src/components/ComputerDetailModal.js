@@ -519,8 +519,8 @@ const ComputerDetailModal = ({ computer, isOpen, onClose }) => {
         }
       }
       
-      // Install the printer
-      const installResult = await window.electronAPI?.installPrinter?.(
+      // Install the printer remotely
+      const installResult = await window.electronAPI?.installPrinterRemote?.(
         computer.computerName,
         printer.ip,
         printer.name

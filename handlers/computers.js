@@ -277,8 +277,8 @@ function registerComputerHandlers() {
     }
   });
 
-  // Install Printer using PowerShell and PSExec
-  ipcMain.handle('install-printer', async (event, computerName, printerIP, printerName) => {
+  // Install Printer remotely using PowerShell and PSExec
+  ipcMain.handle('install-printer-remote', async (event, computerName, printerIP, printerName) => {
     return new Promise((resolve) => {
       // PowerShell script to install network printer
       const psScript = `
