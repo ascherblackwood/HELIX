@@ -41,10 +41,10 @@ Simplify complex AD operations through an elegant desktop interface while provid
 
 ### 4.1 Technical Stack
 - **Frontend:** React 18.2.0 with Tailwind CSS 3.3.3
-- **Desktop Framework:** Electron 26.6.10
+- **Desktop Framework:** Electron 26.0.0
 - **Icons:** HeroIcons 2.0.18
 - **Routing:** React Router DOM 6.15.0
-- **Reporting:** XLSX library for Excel generation
+- **Reporting:** XLSX 0.18.5 library for Excel generation
 - **Backend Integration:** PowerShell, Active Directory module, LDAP
 
 ### 4.2 Application Structure
@@ -76,14 +76,15 @@ Simplify complex AD operations through an elegant desktop interface while provid
 - **Improved maintainability** with logical code separation
 
 ### 4.3 Build & Packaging (Current Build)
-- Builder: electron-builder 24.x
+- Builder: electron-builder 24.6.3
 - Target: Windows portable (single-file .exe)
 - Output: `dist-build/ActV-v3.4.2.exe` (filename reflects semver without leading zeros)
 - ASAR: enabled
-- Included: `build/**`, `main.js`, `preload.js`, `node_modules/**`, `src/assets/**`, `handlers/**`, `utils/**`, `PrinterManagement.ps1`
+- Included: `build/**`, `main.js`, `preload.js`, `node_modules/**`, `src/assets/**`, `handlers/**`, `utils/**`
 - Icon: `src/assets/actv.ico`
 - App ID: `com.actv.admanager`
-- Size: ~85MB portable executable
+- Size: ~81MB portable executable
+- **Developer Tools**: Disabled in production builds (no automatic DevTools opening)
 
 ## 5. Core Features
 
@@ -266,6 +267,36 @@ All reports generate as downloadable Excel (.xls) files with professional format
 - **OU-Specific Operations:** All searches and operations limited to selected OU
 - **Connection Status:** Visual indicators and detailed connection information
 
+### 5.8 Administrative Tools Integration (NEW)
+**Quick Launch Tools:**
+ActV provides seamless integration with Windows administrative tools, launching them with cached credentials for improved workflow efficiency:
+
+- **Active Directory Users and Computers (ADUC):**
+  - Launch `dsa.msc` with stored or cached credentials
+  - Automatic credential format conversion (UPN to DOMAIN\user)
+  - Fallback to current session if credentials unavailable
+  - Multiple launch methods: direct credential passing, runas, or current context
+
+- **Group Policy Management Console (GPMC):**
+  - Launch `gpmc.msc` with automatic path detection
+  - Intelligent RSAT installation verification
+  - Multiple path detection locations (System32, Program Files, Start Menu)
+  - Helpful installation guidance if GPMC not found
+  - Credential-based launch with session caching
+  - Supports both installed and RSAT-based GPMC locations
+
+- **PowerShell (x86):**
+  - Launch 32-bit PowerShell with domain credentials
+  - Useful for legacy module compatibility
+  - Automatic fallback to 64-bit PowerShell if x86 unavailable
+  - Credential injection for seamless authentication
+
+**Credential Management:**
+- **In-Memory Credential Cache:** Stores credentials securely during application session
+- **Automatic Cleanup:** Credentials cleared on application exit
+- **Format Conversion:** Handles UPN, DOMAIN\user, and simple username formats
+- **Security:** No credentials written to disk, memory-only storage
+
 ## 6. Technical Requirements
 
 ### 6.1 System Requirements
@@ -360,11 +391,12 @@ All reports generate as downloadable Excel (.xls) files with professional format
 ## 9. Deployment Strategy
 
 ### 9.1 Distribution Method
-- **Portable Executable:** Single ActV-v3.4.1.exe file (~85MB)
+- **Portable Executable:** Single ActV-v3.4.2.exe file (~81MB)
 - **No Installation Required:** Copy and run deployment model
 - **Self-Contained:** All dependencies included in executable
 - **Version Control:** Clear version identification in filename and UI
 - **Enhanced Security:** No external tool dependencies (PSExec eliminated)
+- **Production Ready:** Developer tools disabled in production builds
 
 ### 9.2 Configuration Management
 - **Persistent Settings:** Configuration saved across application restarts
@@ -421,16 +453,28 @@ All reports generate as downloadable Excel (.xls) files with professional format
 ## Appendix A: Current API Endpoints
 
 ### Main Process IPC Handlers
+
+**Authentication & Connection:**
 - `ldap-connect`: Active Directory connection with Kerberos support
+- `ldap-connect-kerberos`: Dedicated Kerberos/Negotiate authentication with TGT verification
 - `ldap-search`: OU-scoped Active Directory queries
-- `get-system-info`: Local system and application information
-- `get-ad-counts`: Domain-wide AD statistics (legacy)
-- `get-ou-counts`: OU-specific statistics (current implementation)
+
+**User Management:**
 - `add-user-to-group`: Real-time group membership addition
 - `remove-user-from-group`: Real-time group membership removal
 - `update-ad-user`: User property updates in Active Directory
 - `reset-ad-password`: User password reset operations
 - `toggle-ad-user-account`: Account enable/disable operations
+
+**System Information:**
+- `get-system-info`: Local system and application information
+- `get-ad-counts`: Domain-wide AD statistics (legacy)
+- `get-ou-counts`: OU-specific statistics (current implementation)
+
+**Administrative Tools (NEW):**
+- `launch-aduc`: Launch Active Directory Users and Computers with credentials
+- `launch-gpmc`: Launch Group Policy Management Console with automatic path detection
+- `launch-powershell-x86`: Launch 32-bit PowerShell with domain credentials
 
 ### Remote Management & Inventory
 - `test-winrm`: Check WinRM connectivity to target.
@@ -541,14 +585,50 @@ All reports generate as downloadable Excel (.xls) files with professional format
 
 ---
 
-*This PRD reflects ActV v3.4.1 as of October 2025 and serves as the comprehensive specification for current and planned functionality.*
+*This PRD reflects ActV v3.4.2 as of October 2025 and serves as the comprehensive specification for current and planned functionality.*
 
 ## 13. Release Notes
 
-### 13.1 Release Notes (v3.2.1) - CURRENT
+### 13.1 Release Notes (v3.4.2) - CURRENT
 **Major Feature Enhancements:**
 
-**⚡ Architecture Refactoring (NEW):**
+**🔧 Administrative Tools Integration (NEW):**
+- **Group Policy Management Console (GPMC)**: Integrated launcher with intelligent path detection
+  - Automatic detection of GPMC installation across multiple locations
+  - RSAT installation verification and helpful guidance
+  - Credential-based launch with session caching
+  - Support for both standard and RSAT-based installations
+- **Enhanced ADUC Launch**: Improved Active Directory Users and Computers launcher
+  - Credential caching for seamless repeated launches
+  - Automatic username format conversion (UPN ↔ DOMAIN\user)
+  - Multiple launch methods with smart fallbacks
+- **PowerShell x86 Integration**: 32-bit PowerShell launcher for legacy module support
+  - Credential injection for domain authentication
+  - Automatic fallback to 64-bit PowerShell if unavailable
+
+**🔐 Credential Management:**
+- **In-Memory Credential Cache**: Secure session-based credential storage
+  - Credentials stored only in memory, never written to disk
+  - Automatic cleanup on application exit
+  - Used for launching administrative tools with proper authentication
+- **Enhanced Security**: No credential persistence, memory-only storage model
+
+**🛠️ Technical Improvements:**
+- **Developer Tools Disabled**: Production builds no longer open DevTools automatically
+- **Improved Error Handling**: Better error messages for profile management operations
+- **Version Consistency**: Updated version to 3.4.2 across all UI elements and build artifacts
+
+**📦 Build & Distribution:**
+- **Updated Version**: v3.4.2 (from v3.4.1) following semantic versioning
+- **Build Output**: `dist-build/ActV-v3.4.2.exe` (~81MB portable executable)
+- **Optimized Size**: Reduced from ~85MB to ~81MB through build optimizations
+- **No Installation Required**: Single-file portable deployment maintained
+- **Enhanced API Surface**: 3 new IPC handlers for administrative tool integration
+
+### 13.2 Previous Release Notes (v3.4.1)
+**Major Feature Enhancements:**
+
+**⚡ Architecture Refactoring:**
 - **Modular Backend Architecture**: Complete refactoring of main.js from 2,207 lines to 79 lines (96% reduction)
 - **Functional Handler Separation**: 6 specialized handler modules for improved maintainability
   - `handlers/auth.js` - Authentication and LDAP connections
@@ -598,7 +678,13 @@ All reports generate as downloadable Excel (.xls) files with professional format
 - **No Installation Required**: Single-file portable deployment maintained
 - **Enhanced API Surface**: 6 new IPC handlers for extended functionality
 
-### 13.2 Previous Release Notes (v3.02.01)
+### 13.3 Previous Release Notes (v3.3.1)
+- Modular backend architecture (96% code reduction)
+- Performance optimizations
+- Enhanced security features
+- Improved error isolation
+
+### 13.4 Historical Release Notes (v3.02.01)
 - Computer Details uses local CIM for this machine (no WinRM) with accurate Manufacturer/Model/Serial/Memory/IP.
 - Safe last-boot time handling (supports DateTime and DMTF formats).
 - IPv4 detection hardened with `Get-NetIPAddress` fallback; Domain and MAC wired from live inventory.

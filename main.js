@@ -37,8 +37,6 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    // Always open DevTools to debug issues
-    mainWindow.webContents.openDevTools();
   });
 
   mainWindow.on('closed', () => {
