@@ -145,9 +145,9 @@ That's it! You're ready to start managing your Active Directory.
 
 ---
 
-## Why ActV Instead of Built-in Tools?
+## Why HELIX Instead of Built-in Tools?
 
-| ActV | Traditional Tools |
+| HELIX | Traditional Tools |
 |------|------------------|
 | ✅ Modern, clean interface | ❌ Complex, dated interfaces |
 | ✅ All tasks in one place | ❌ Multiple separate programs |
@@ -214,7 +214,7 @@ Found a bug? Have a feature request? Want to provide feedback?
 
 **ActV v3.4.2**
 Built with Electron, React, and PowerShell
-© 2025 ActV Team
+© 2025 Helix Team
 
 ---
 
