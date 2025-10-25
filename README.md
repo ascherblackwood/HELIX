@@ -1,14 +1,14 @@
-# ActV - Active Directory Management Tool
+# Helix - Active Directory Management Tool
 
 **Version 3.4.2** | A modern desktop application for managing Active Directory environments
 
 ---
 
-## What is ActV?
+## What is Helix?
 
-ActV (Active Vector) is a Windows desktop application that makes it easy for IT administrators to manage users, computers, and groups in Active Directory. Think of it as a user-friendly control panel for your company's network resources.
+Helix (Active Vector) is a Windows desktop application that makes it easy for IT administrators to manage users, computers, and groups in Active Directory. Think of it as a user-friendly control panel for your company's network resources.
 
-Instead of using complex command-line tools or multiple different programs, ActV brings everything you need into one modern, easy-to-use interface.
+Instead of using complex command-line tools or multiple different programs, Helix brings everything you need into one modern, easy-to-use interface.
 
 ---
 
@@ -21,7 +21,7 @@ Instead of using complex command-line tools or multiple different programs, ActV
 
 ---
 
-## What can ActV do?
+## What can Helix do?
 
 ### 👥 User Management
 - View all users in your organization
@@ -98,8 +98,8 @@ Instead of using complex command-line tools or multiple different programs, ActV
 - Network access to your domain controllers
 - PowerShell with Active Directory module installed
 
-### Running ActV
-1. Download `ActV-v3.4.2.exe`
+### Running Helix
+1. Download `Helix-v3.4.2.exe`
 2. Double-click to launch (no installation needed)
 3. Click "Settings" in the left sidebar
 4. Enter your domain controller information:
@@ -145,9 +145,9 @@ That's it! You're ready to start managing your Active Directory.
 
 ---
 
-## Why HELIX Instead of Built-in Tools?
+## Why Helix Instead of Built-in Tools?
 
-| HELIX | Traditional Tools |
+| Helix | Traditional Tools |
 |------|------------------|
 | ✅ Modern, clean interface | ❌ Complex, dated interfaces |
 | ✅ All tasks in one place | ❌ Multiple separate programs |
@@ -205,14 +205,14 @@ That's it! You're ready to start managing your Active Directory.
 Found a bug? Have a feature request? Want to provide feedback?
 
 - **Issues**: Report bugs at the project repository
-- **Documentation**: Full technical documentation available in `ACTV_PRD.md`
+- **Documentation**: Full technical documentation available in `Helix_PRD.md`
 - **Updates**: Check for new versions regularly
 
 ---
 
 ## License & Credits
 
-**ActV v3.4.2**
+**Helix v3.4.2**
 Built with Electron, React, and PowerShell
 © 2025 Helix Team
 
@@ -242,4 +242,4 @@ Built with Electron, React, and PowerShell
 
 ---
 
-**Ready to simplify your Active Directory management? Download ActV and get started today!**
+**Ready to simplify your Active Directory management? Download Helix and get started today!**
