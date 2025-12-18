@@ -6,7 +6,7 @@
 
 ## What is Helix?
 
-Helix (Active Vector) is a Windows desktop application that makes it easy for IT administrators to manage users, computers, and groups in Active Directory. Think of it as a user-friendly control panel for your company's network resources.
+Helix is a Windows desktop application that makes it easy for IT administrators to manage users, computers, and groups in Active Directory. Think of it as a user-friendly control panel for your company's network resources.
 
 Instead of using complex command-line tools or multiple different programs, Helix brings everything you need into one modern, easy-to-use interface.
 
